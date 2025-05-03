@@ -23,6 +23,28 @@ spec:
           ports:
             - containerPort: {{ .Values.frontend.service.port }}
               name: http
+          # 為前端服務添加健康檢查
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.frontend.healthCheck.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.frontend.healthCheck.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.healthCheck.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.frontend.healthCheck.liveness.failureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.frontend.healthCheck.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.frontend.healthCheck.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.frontend.healthCheck.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.frontend.healthCheck.readiness.failureThreshold }}
+          # 設定環境變數以連接後端
+          env:
+            - name: API_URL
+              value: "http://{{ include "gpu-service-be.fullname" . }}:{{ .Values.service.port }}"
+          # 添加資源限制
+          resources: 
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
 ---
 apiVersion: v1
 kind: Service

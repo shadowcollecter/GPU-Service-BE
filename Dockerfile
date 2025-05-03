@@ -19,4 +19,12 @@ RUN ./gradlew --no-daemon bootJar
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/gpu-service-BE-*.jar app.jar
-ENTRYPOINT ["java","-jar","/app/app.jar"]
+
+# 設置環境變數，指定使用k8s配置文件
+ENV SPRING_PROFILES_ACTIVE=k8s
+
+# 設置JVM參數以優化容器中的記憶體使用
+ENV JAVA_OPTS="-Xmx2g -Xms1g -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+
+# 啟動應用程序
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]

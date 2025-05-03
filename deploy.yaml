@@ -1,0 +1,260 @@
+# gpu-service-deployment.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gpu-service
+---
+# 後端服務的部署配置
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-service-be
+  namespace: gpu-service
+  labels:
+    app: gpu-service-be
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-service-be
+  template:
+    metadata:
+      labels:
+        app: gpu-service-be
+    spec:
+      serviceAccountName: gpu-service-be-account
+      containers:
+      - name: gpu-service-be
+        image: [YOUR_BACKEND_IMAGE_URL]  # 需要您提供的信息1：後端服務的Docker鏡像URL
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "k8s"
+        - name: KUBERNETES_NAMESPACE
+          value: "gpu-service"
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:postgresql://postgresql.gpu-service.svc.cluster.local:5432/gpu_service_be"
+        - name: SPRING_DATASOURCE_USERNAME
+          value: "postgres"
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: db-credentials
+              key: password
+        - name: SPRING_DATA_REDIS_HOST
+          value: "redis-master.gpu-service.svc.cluster.local"
+        - name: SPRING_DATA_REDIS_PORT
+          value: "6379"
+        - name: SPRING_DATA_REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: redis-credentials
+              key: password
+        - name: MINIO_URL
+          value: "http://minio.gpu-service.svc.cluster.local:9000"
+        - name: MINIO_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: access-key
+        - name: MINIO_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secret-key
+        - name: MINIO_BUCKET_NAME
+          value: "notebooks"
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: jwt-credentials
+              key: secret-key
+        - name: APP_FRONTEND_URL
+          value: "https://jupyterhub.csie.ncu.edu.tw"
+        resources:
+          requests:
+            cpu: "2000m"
+            memory: "2Gi"
+          limits:
+            cpu: "4000m"
+            memory: "3Gi"
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          failureThreshold: 3
+---
+# 後端服務暴露
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-service-be
+  namespace: gpu-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: gpu-service-be
+---
+# 前端服務的部署配置
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gpu-service-fe
+  namespace: gpu-service
+  labels:
+    app: gpu-service-fe
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gpu-service-fe
+  template:
+    metadata:
+      labels:
+        app: gpu-service-fe
+    spec:
+      containers:
+      - name: gpu-service-fe
+        image: [YOUR_FRONTEND_IMAGE_URL]  # 需要您提供的信息2：前端服務的Docker鏡像URL
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: API_URL
+          value: "http://gpu-service-be:8080"
+        resources:
+          requests:
+            cpu: "200m"
+            memory: "512Mi"
+          limits:
+            cpu: "400m"
+            memory: "1Gi"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          failureThreshold: 3
+---
+# 前端服務暴露
+apiVersion: v1
+kind: Service
+metadata:
+  name: gpu-service-fe
+  namespace: gpu-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+    protocol: TCP
+    name: http
+  selector:
+    app: gpu-service-fe
+---
+# 服務帳號（用於Kubernetes API訪問）
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gpu-service-be-account
+  namespace: gpu-service
+---
+# 必要的ClusterRole（與您的cluster-rule.yaml類似）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: gpu-service-be-role
+rules:
+- apiGroups: [""]
+  resources: ["pods","jobs"]
+  verbs: ["get","list","watch","create","delete"]
+- apiGroups: ["scheduling.run.ai"]
+  resources: ["podgroups","queues","bindrequests","podgroups/status","bindrequests/status"]
+  verbs: ["get","list","watch","patch"]
+---
+# ClusterRole綁定
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: gpu-service-be-binding
+subjects:
+- kind: ServiceAccount
+  name: gpu-service-be-account
+  namespace: gpu-service
+roleRef:
+  kind: ClusterRole
+  name: gpu-service-be-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# 任務配置信息
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: job-config
+  namespace: gpu-service
+data:
+  CALLBACK_BASE_URL: "http://gpu-service-be.gpu-service.svc.cluster.local:8080/api/v1/task/status"
+  MINIO_ENDPOINT: "http://minio.gpu-service.svc.cluster.local:9000"
+  MINIO_BUCKET: "notebooks"
+---
+# Ingress 配置
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gpu-service-ingress
+  namespace: gpu-service
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - jupyterhub.csie.ncu.edu.tw
+    secretName: jupyterhub-csie-ncu-tls
+  rules:
+  - host: jupyterhub.csie.ncu.edu.tw
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: gpu-service-be
+            port:
+              number: 8080
+      - path: /frontend
+        pathType: Prefix
+        backend:
+          service:
+            name: gpu-service-fe
+            port:
+              number: 80

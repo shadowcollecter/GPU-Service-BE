@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: notebook-gpu-job
-  namespace: gpu-service
+  namespace: kai-scheduler
   annotations:
     gpu-service-be.csie.ncu.edu.tw/submission-id: "${SUBMISSION_ID}"
     gpu-service-be.csie.ncu.edu.tw/user-id:       "${USER_ID}"

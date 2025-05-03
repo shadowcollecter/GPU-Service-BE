@@ -147,7 +147,7 @@ spec:
             memory: "1024Mi"
           limits:
             cpu: "1500m"
-            memory: "2048Gi"
+            memory: "2048Mi"
         livenessProbe:
           httpGet:
             path: /

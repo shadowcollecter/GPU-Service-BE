@@ -1,0 +1,27 @@
+apiVersion: v2
+name: gpu-service-be
+description: "Helm chart for GPU Service Backend and its Kubernetes dependencies"
+type: application
+version: 0.1.0
+appVersion: "0.0.1-SNAPSHOT"
+dependencies:
+  - name: minio
+    alias: minio
+    repository: "https://charts.bitnami.com/bitnami"
+    version: "16.0.8"
+    condition: minio.enabled
+  - name: postgresql-ha
+    alias: postgresql
+    repository: "https://charts.bitnami.com/bitnami"
+    version: "15.3.15"
+    condition: postgresql.enabled
+  - name: redis
+    alias: redis
+    repository: "https://charts.bitnami.com/bitnami"
+    version: "20.13.2"
+    condition: redis.enabled
+  - name: kai-scheduler
+    alias: kaiScheduler
+    repository: "oci://ghcr.io/nvidia/kai-scheduler/kai-scheduler"
+    version: "v0.4.7"
+    condition: kaiScheduler.enabled

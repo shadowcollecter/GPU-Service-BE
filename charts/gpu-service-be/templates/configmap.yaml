@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: job-config
+  labels:
+    app.kubernetes.io/name: {{ include "gpu-service-be.fullname" . }}
+data:
+  CALLBACK_BASE_URL: "{{ .Values.config.callbackBaseUrl }}"
+  MINIO_ENDPOINT: "{{ .Values.config.minioEndpoint }}"
+  MINIO_BUCKET: "{{ .Values.config.minioBucket }}"

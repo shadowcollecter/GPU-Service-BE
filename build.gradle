@@ -1,0 +1,57 @@
+plugins {
+	id 'java'
+	id 'org.springframework.boot' version '3.4.5'
+	id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'csie.ncu.edu.tw'
+version = '0.0.1-SNAPSHOT'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(17)
+	}
+}
+
+repositories {
+	mavenCentral()
+	// for OpenSAML artifacts required by spring-security-saml2-service-provider
+	maven { url 'https://build.shibboleth.net/maven/releases/' }
+	// fallback to local 'libs' folder for OpenSAML artifacts if external repo is down
+	flatDir {
+		dirs 'libs'
+	}
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-mail'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.11.5'
+    runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.11.5'
+    runtimeOnly 'org.postgresql:postgresql'
+    runtimeOnly 'com.h2database:h2'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
+    implementation 'com.googlecode.owasp-java-html-sanitizer:owasp-java-html-sanitizer:20240325.1'
+    implementation 'io.kubernetes:client-java:18.0.0'
+    implementation 'jakarta.annotation:jakarta.annotation-api:2.1.0'
+    implementation 'org.springframework.security:spring-security-saml2-service-provider:6.4.5'
+    implementation 'org.springframework.boot:spring-boot-starter-logging'
+    implementation 'io.minio:minio:8.5.17'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    // manual OpenSAML jars, place opensaml-saml-api-4.3.2.jar and opensaml-saml-impl-4.3.2.jar into project 'libs/'
+}
+
+tasks.named('test') {
+	useJUnitPlatform()
+}
+

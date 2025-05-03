@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<md:EntityDescriptor ID="_7e6bab89-5038-4543-9314-464f89becb7b" entityID="https://portal.ncu.edu.tw/saml/idp" validUntil="2025-04-29T13:52:45.350Z" xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata"><ds:Signature xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/><ds:Reference URI="#_7e6bab89-5038-4543-9314-464f89becb7b"><ds:Transforms><ds:Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><ds:Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></ds:Transforms><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue/></ds:Reference></ds:SignedInfo><ds:SignatureValue/></ds:Signature><md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><md:KeyDescriptor use="signing"><ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#"><ds:X509Data><ds:X509Certificate>MIID/TCCAuWgAwIBAgIUb2cOQPqRJcsBMuQt9tJIRkol4iwwDQYJKoZIhvcNAQELBQAwgY0xCzAJ
+BgNVBAYTAlRXMQ8wDQYDVQQIDAZUYWl3YW4xETAPBgNVBAcMCFRhbyBZdWFuMSQwIgYDVQQKDBtO
+YXRpb25hbCBDZW50cmFsIFVuaXZlcnNpdHkxGDAWBgNVBAsMD0NvbXB1dGVyIENlbnRlcjEaMBgG
+A1UEAwwRcG9ydGFsLm5jdS5lZHUudHcwHhcNMjEwNDIxMDc1MzI3WhcNMjYxMDEyMDc1MzI3WjCB
+jTELMAkGA1UEBhMCVFcxDzANBgNVBAgMBlRhaXdhbjERMA8GA1UEBwwIVGFvIFl1YW4xJDAiBgNV
+BAoMG05hdGlvbmFsIENlbnRyYWwgVW5pdmVyc2l0eTEYMBYGA1UECwwPQ29tcHV0ZXIgQ2VudGVy
+MRowGAYDVQQDDBFwb3J0YWwubmN1LmVkdS50dzCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoC
+ggEBANr4GTbihT6gwJoL0W6m8Kx0xf/ocMyjVBHanWP6cPT1RwFNu5ik4g0aZCS4hRKXvEdAwsId
+0iZwThLAKAEIjDVXdpvNYmau5ybGAEJwct+Gq+mAi7eQ+LGHs/BhF1CWVzYMgx2xrdzqeevuUwB/
+Oa+5SuAAvsEDXrtCVuQJaKn7Dl4Mx4e5FrnYrjSqWdbMO912ZQxAKYAxm72Y7vcwvHwAZArGfWjK
+BpI17OT7gDndm+TQxqabeIL1ZfwjjiTd5HUKEjelzUYY3P9asUMoKWCTRCHqMhsHzeOMDKEy//zM
+xRSFZVYL075zqAzMz4gX9+VwYx9SUSf6lfMbWkWBc2sCAwEAAaNTMFEwHQYDVR0OBBYEFBYESZB6
+2GL157du+HeA1f/G6Jz5MB8GA1UdIwQYMBaAFBYESZB62GL157du+HeA1f/G6Jz5MA8GA1UdEwEB
+/wQFMAMBAf8wDQYJKoZIhvcNAQELBQADggEBACkilrXRR8gZoMSNKDPUjd3auZR7SoGTLHeogkov
+D8MHnBEL2NwFMKnp+TK1qCK2CcIcVZ6B+bAt4EVJL8NS6tHGDTN80fkLHbT+XjN+cLqTkU/GAvav
+gvi76yClo9vg/fFxYrA4RnksVbl6D+QU1wbpJlOiM8VkQsWrjFRp1T5DUNM/VaCbEHwI4Nq1tpys
+4SHEcHrZUva67FtY4MFuxBIzibgd8XdOj7RnwmLHwFh06PHBN7TXGrQKCk0ZvHPM8VWuNzQKQX38
+GXoAlAi9V4g9ukhMDiQa5rT03GPYuXARYtvq3E1//0lJ6zJIxBfy4HJV8YiwVysFrTb+1ZfDZU8=</ds:X509Certificate></ds:X509Data></ds:KeyInfo></md:KeyDescriptor><md:NameIDFormat>urn:oasis:names:tc:SAML:2.0:nameid-format:persistent</md:NameIDFormat><md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://portal.ncu.edu.tw/saml/sso"/></md:IDPSSODescriptor></md:EntityDescriptor>

@@ -1,0 +1,91 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: notebook-gpu-job
+  namespace: gpu-service
+  annotations:
+    gpu-service-be.csie.ncu.edu.tw/submission-id: "${SUBMISSION_ID}"
+    gpu-service-be.csie.ncu.edu.tw/user-id:       "${USER_ID}"
+    gpu-service-be.csie.ncu.edu.tw/timestamp:     "${TIMESTAMP}"
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 300    # auto delete Job/Pods 5min after finish (success or failure)
+  activeDeadlineSeconds: 3600     # limit job run to max 1 hour
+  template:
+    metadata:
+      labels:
+        runai/queue: gpu-queue-a40
+      annotations:
+        gpu-service-be.csie.ncu.edu.tw/submission-id: "${SUBMISSION_ID}"
+        gpu-service-be.csie.ncu.edu.tw/user-id:       "${USER_ID}"
+        gpu-service-be.csie.ncu.edu.tw/timestamp:     "${TIMESTAMP}"
+    spec:
+      nodeSelector:
+        nvidia.com/gpu.product: NVIDIA-A40-48GB-PCIe
+      schedulerName: kai-scheduler
+      restartPolicy: Never
+      serviceAccountName: gpu-service-be-account
+      containers:
+      - name: runner
+        image: shadowcollect/ipynb-runner:latest
+        resources:
+          requests:
+            cpu:    "500m"
+            memory: "1Gi"
+            nvidia.com/gpu: "1"
+            # 如果使用 40GiB MIG：
+            # nvidia.com/mig-1g.40gb: "1"
+        env:
+        - name: CALLBACK_BASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: job-config
+              key: CALLBACK_BASE_URL
+        - name: SUBMISSION_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/submission-id']
+        - name: USER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/user-id']
+        - name: TIMESTAMP
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/timestamp']
+        - name: MINIO_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: job-config
+              key: MINIO_ENDPOINT
+        - name: MINIO_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: job-config
+              key: MINIO_BUCKET
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: accesskey
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: minio-credentials
+              key: secretkey
+        command:
+        - /bin/bash
+        - -c
+        - |
+          set -euo pipefail
+          # 上传原始 notebook
+          aws --endpoint-url=$MINIO_ENDPOINT s3 cp input.ipynb \
+            s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_original/notebook.ipynb
+          papermill input.ipynb output.ipynb \
+            --no-progress-bar --log-output
+          # 上传执行结果
+          aws --endpoint-url=$MINIO_ENDPOINT s3 cp output.ipynb \
+            s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_results/result_notebook.ipynb
+          curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
+               -H "Content-Type: application/json" \
+               -d '{"submissionId":"'"$SUBMISSION_ID"'","status":"COMPLETED","resultPath":"s3://'$MINIO_BUCKET'/submissions/'"$USER_ID"'/'"${TIMESTAMP}"'_results/result_notebook.ipynb"}'

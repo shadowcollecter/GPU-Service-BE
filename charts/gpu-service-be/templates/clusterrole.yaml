@@ -1,0 +1,11 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ template "gpu-service-be.fullname" . }}-role
+rules:
+- apiGroups: [""]
+  resources: ["pods","jobs"]
+  verbs: ["get","list","watch","create","delete"]
+- apiGroups: ["scheduling.run.ai"]
+  resources: ["podgroups","queues","bindrequests","podgroups/status","bindrequests/status"]
+  verbs: ["get","list","watch","patch"]

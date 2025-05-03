@@ -1,0 +1,150 @@
+replicaCount: 1
+
+image:
+  repository: csie/ncu/gpu-service-be
+  tag: "0.0.1-SNAPSHOT"
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  name: ""
+
+# MinIO and callback configuration
+config:
+  callbackBaseUrl: "https://backend/api/v1/task/status"
+  minioEndpoint: "http://192.168.194.217:9000"
+  minioBucket: "notebooks"
+
+# MinIO credentials
+secret:
+  minio:
+    accessKey: "admin"
+    secretKey: "mhAH74T0Wo"
+
+# GPU config for mapping types, templates and queues
+gpu:
+  cpu:
+    yaml: cpu-requested-job.yaml
+    queue: cpu-queue
+  types:
+    - type: NVIDIA-A100-80GB-PCIe
+      yaml: gpu-requested-job-a100.yaml
+      queue: gpu-queue-a100
+    - type: NVIDIA-A40-48GB-PCIe
+      yaml: gpu-requested-job-a40.yaml
+      queue: gpu-queue-a40
+
+# Unified queue configuration
+queue:
+  names:
+    - cpu-queue
+    - gpu-queue-a100
+    - gpu-queue-a40
+  redisKeys:
+    cpu-queue: "task_queue_cpu"
+    gpu-queue-a100: "task_queue_a100"
+    gpu-queue-a40: "task_queue_a40"
+
+service:
+  type: ClusterIP
+  port: 8080
+
+resources: {}
+
+tolerations: []
+
+affinity: {}
+
+nodeSelector: {}
+
+frontend:
+  enabled: true
+  image:
+    repository: shadowcollect/gpu-service-fe
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 80
+
+application:
+  activeProfile: dev
+
+# Application-specific configurations
+applicationProperties:
+  dev:
+    spring:
+      datasource:
+        url: "jdbc:postgresql://192.168.194.173:5432/gpu_service_be"
+        username: "postgres"
+        password: "czCqSinzp0"
+        driverClassName: "org.postgresql.Driver"
+      data:
+        redis:
+          host: "192.168.194.182"
+          port: 6379
+          password: "FNsfJW3B1n"
+    minio:
+      url: "http://192.168.194.217:9000"
+      accessKey: "admin"
+      secretKey: "mhAH74T0Wo"
+      bucketName: "notebooks"
+    app:
+      frontendUrl: "http://localhost:4173"
+  prod:
+    spring:
+      datasource:
+        url: "jdbc:postgresql://prod-db:5432/gpu_service_be"
+        username: "postgres"
+        password: "czCqSinzp0"
+        driverClassName: "org.postgresql.Driver"
+      data:
+        redis:
+          host: "prod-redis"
+          port: 6379
+          password: "czCqSinzp0"
+    minio:
+      url: "https://minio.prod.svc.cluster.local:9000"
+      accessKey: "admin"
+      secretKey: "mhAH74T0Wo"
+      bucketName: "notebooks"
+    app:
+      frontendUrl: "https://frontend.prod.svc.cluster.local"
+
+# Helm chart dependencies
+minio:
+  enabled: true
+  auth:
+    rootUser: "admin"
+    rootPassword: "mhAH74T0Wo"
+  persistence:
+    size: 100Gi
+
+postgresql:
+  enabled: true
+  postgresqlUsername: "postgres"
+  postgresqlPassword: "czCqSinzp0"
+  postgresqlDatabase: "gpu_service_be"
+  persistence:
+    size: 100Gi
+
+redis:
+  enabled: true
+  architecture: replication
+  auth:
+    password: "czCqSinzp0"
+
+kaiScheduler:
+  enabled: true
+  global:
+    gpuSharing: false
+    cdiEnabled: true         # 开启 CDI 挂载
+  scheduler:
+    additionalArgs:
+      - "--cdi-enabled=true"
+  binder:
+    additionalArgs:
+      - "--cdi-enabled=true"
+
+
+# helm upgrade --install gpu-service-be charts/gpu-service-be -n gpu-service --set application.activeProfile=prod

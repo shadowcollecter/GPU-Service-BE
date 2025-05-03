@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: job-config
+  namespace: gpu-service
+data:
+  CALLBACK_BASE_URL: "https://backend/api/v1/task/status"
+  MINIO_ENDPOINT: "http://192.168.194.217:9000"
+  MINIO_BUCKET:   "notebooks"

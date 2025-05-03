@@ -143,11 +143,11 @@ spec:
           value: "http://gpu-service-be.gpu-service.svc.cluster.local:8080"  # 使用完整的集群內部DNS名稱
         resources:
           requests:
-            cpu: "200m"
-            memory: "512Mi"
+            cpu: "1000m"
+            memory: "1024Mi"
           limits:
-            cpu: "400m"
-            memory: "1Gi"
+            cpu: "1500m"
+            memory: "2048Gi"
         livenessProbe:
           httpGet:
             path: /

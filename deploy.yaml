@@ -26,7 +26,7 @@ spec:
       serviceAccountName: gpu-service-be-account
       containers:
       - name: gpu-service-be
-        image: [YOUR_BACKEND_IMAGE_URL]  # 需要您提供的信息1：後端服務的Docker鏡像URL
+        image: shadowcollect/gpu-service-be:latest  
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -77,34 +77,34 @@ spec:
           value: "https://jupyterhub.csie.ncu.edu.tw"
         resources:
           requests:
-            cpu: "2000m"
-            memory: "2Gi"
-          limits:
             cpu: "4000m"
-            memory: "3Gi"
-        livenessProbe:
-          httpGet:
-            path: /actuator/health/liveness
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 30
-          failureThreshold: 3
-        readinessProbe:
-          httpGet:
-            path: /actuator/health/readiness
-            port: 8080
-          initialDelaySeconds: 30
-          periodSeconds: 20
-          failureThreshold: 3
+            memory: "4Gi"
+          limits:
+            cpu: "6000m"
+            memory: "6Gi"
+        # livenessProbe:
+        #   httpGet:
+        #     path: /actuator/health/liveness
+        #     port: 8080
+        #   initialDelaySeconds: 60
+        #   periodSeconds: 30
+        #   failureThreshold: 3
+        # readinessProbe:
+        #   httpGet:
+        #     path: /actuator/health/readiness
+        #     port: 8080
+        #   initialDelaySeconds: 30
+        #   periodSeconds: 20
+        #   failureThreshold: 3
 ---
-# 後端服務暴露
+# 後端服務暴露 (僅供集群內部訪問)
 apiVersion: v1
 kind: Service
 metadata:
   name: gpu-service-be
   namespace: gpu-service
 spec:
-  type: ClusterIP
+  type: ClusterIP  # 僅供集群內部訪問
   ports:
   - port: 8080
     targetPort: 8080
@@ -133,14 +133,14 @@ spec:
     spec:
       containers:
       - name: gpu-service-fe
-        image: [YOUR_FRONTEND_IMAGE_URL]  # 需要您提供的信息2：前端服務的Docker鏡像URL
+        image: shadowcollect/gpu-service-fe
         imagePullPolicy: Always
         ports:
         - containerPort: 80
           name: http
         env:
         - name: API_URL
-          value: "http://gpu-service-be:8080"
+          value: "http://gpu-service-be.gpu-service.svc.cluster.local:8080"  # 使用完整的集群內部DNS名稱
         resources:
           requests:
             cpu: "200m"
@@ -224,7 +224,7 @@ data:
   MINIO_ENDPOINT: "http://minio.gpu-service.svc.cluster.local:9000"
   MINIO_BUCKET: "notebooks"
 ---
-# Ingress 配置
+# Ingress 配置 (僅曝露前端)
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -245,13 +245,6 @@ spec:
     http:
       paths:
       - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: gpu-service-be
-            port:
-              number: 8080
-      - path: /frontend
         pathType: Prefix
         backend:
           service:

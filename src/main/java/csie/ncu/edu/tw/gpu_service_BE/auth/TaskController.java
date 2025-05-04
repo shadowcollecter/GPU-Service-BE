@@ -38,6 +38,9 @@ public class TaskController {
 
     @Value("${minio.bucket.name}")
     private String bucketName;
+    
+    @Value("${api.internal.key}")
+    private String internalApiKey;
 
     @Autowired
     private csie.ncu.edu.tw.gpu_service_BE.k8s.DirectKubernetesSchedulerService kubernetesService;
@@ -291,6 +294,77 @@ public class TaskController {
                 }
                 taskExecutionRecordRepository.save(record);
                 return ResponseEntity.ok(Map.of("message", "Status updated"));
+            })
+            .orElseGet(() -> ResponseEntity.status(404).body(Map.of("errorCode", "NOT_FOUND", "message", "Submission not found.")));
+    }
+
+    @PostMapping("/status/{submissionId}/internal")
+    public ResponseEntity<?> internalCallbackStatus(
+            @PathVariable String submissionId,
+            @RequestHeader(name = "X-API-Key", required = false) String apiKey,
+            @RequestBody Map<String, Object> payload) {
+            
+        // 简单的API密钥验证，使用常量或配置的密钥
+        // 注意：在生产环境中應使用更安全的方法存儲和验证API密钥
+        if (apiKey == null || !apiKey.equals(internalApiKey)) {
+            log.warn("Invalid or missing API key in internal callback for submissionId={}", submissionId);
+            return ResponseEntity.status(401).body(Map.of("error", "Invalid or missing API key"));
+        }
+        
+        // Log message with truncated error for readability
+        String status = (String) payload.get("status");
+        if ("FAILED".equals(status) && payload.containsKey("errorMessage")) {
+            String errMsg = (String) payload.get("errorMessage");
+            String truncated = errMsg.length() > 100 ? errMsg.substring(0, 100) + "..." : errMsg;
+            log.info("Received internal callback for submissionId={} with status={} and errorMessage excerpt: {}", 
+                     submissionId, status, truncated);
+        } else {
+            log.info("Received internal callback for submissionId={} with payload={}", submissionId, payload);
+        }
+        
+        // 与常规回调使用相同的处理逻辑
+        return taskExecutionRecordRepository.findBySubmissionId(submissionId)
+            .map(record -> {
+                // update status
+                record.setStatus(TaskExecutionRecord.Status.valueOf(status));
+                
+                // on failure, always update error message and end time
+                if ("FAILED".equals(status)) {
+                    String errMsg = payload.containsKey("errorMessage")
+                                    ? (String) payload.get("errorMessage")
+                                    : record.getRejectionReason();
+                    record.setRejectionReason(errMsg);
+                    record.setEndTime(LocalDateTime.now());
+                }
+                
+                // Ensure resultPath is properly set for completed tasks
+                if (status.equals("COMPLETED")) {
+                    if (payload.containsKey("resultPath")) {
+                        String resultPath = (String) payload.get("resultPath");
+                        record.setResultPath(resultPath);
+                        log.info("Updated resultPath from internal callback: {}", resultPath);
+                    } else {
+                        // Generate resultPath if missing
+                        String timestamp = submissionId.substring(Math.max(0, submissionId.length() - 14));
+                        String generatedPath = String.format("s3://%s/submissions/%s/%s_results/result_notebook.ipynb", 
+                                                            bucketName, record.getUserId(), timestamp);
+                        record.setResultPath(generatedPath);
+                        log.info("Generated missing resultPath: {}", generatedPath);
+                    }
+                }
+                
+                if (payload.containsKey("startTime")) {
+                    record.setStartTime(LocalDateTime.parse((String) payload.get("startTime")));
+                }
+                if (payload.containsKey("endTime")) {
+                    record.setEndTime(LocalDateTime.parse((String) payload.get("endTime")));
+                }
+                if (payload.containsKey("duration")) {
+                    record.setDuration(((Number) payload.get("duration")).longValue());
+                }
+                
+                taskExecutionRecordRepository.save(record);
+                return ResponseEntity.ok(Map.of("message", "Status updated via internal callback"));
             })
             .orElseGet(() -> ResponseEntity.status(404).body(Map.of("errorCode", "NOT_FOUND", "message", "Submission not found.")));
     }

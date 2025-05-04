@@ -192,6 +192,18 @@ data:
   CALLBACK_BASE_URL: "http://gpu-service-be.gpu-service.svc.cluster.local:8080/api/v1/task/status"
   MINIO_ENDPOINT: "http://minio.gpu-service.svc.cluster.local:9000"
   MINIO_BUCKET: "notebooks"
+
+---
+# 內部 API 密鑰 (用於 Job 回調)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: internal-api-credentials
+  namespace: gpu-service
+type: Opaque
+stringData:
+  api-key: gp4E9zKw2sRfTy6VxCbN8mD7HjLq3A5Z
+
 ---
 # Ingress 配置 (僅曝露前端)
 apiVersion: networking.k8s.io/v1
@@ -229,3 +241,5 @@ spec:
             name: gpu-service-fe
             port:
               number: 80
+
+

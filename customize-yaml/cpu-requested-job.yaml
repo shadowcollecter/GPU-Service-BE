@@ -44,7 +44,12 @@ spec:
             fieldRef:
               fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/presign-url']
         - name: CALLBACK_BASE_URL
-          value: "http://gpu-service-be:8080/api/v1/task/status"
+          value: "http://gpu-service-be.gpu-service.svc.cluster.local:8080/api/v1/task/status"
+        - name: INTERNAL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: internal-api-credentials
+              key: api-key
         - name: SUBMISSION_ID
           valueFrom:
             fieldRef:
@@ -79,20 +84,10 @@ spec:
               echo "Notifying backend of job failure..."; \
               error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\n/\\\\n/g" /tmp/job.log); \
               echo "Error message: $error_msg"; \
-              curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
-                   --max-time 10 \
-                   -v \
+              curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID/internal" \
                    -H "Content-Type: application/json" \
+                   -H "X-API-Key: ${INTERNAL_API_KEY}" \
                    -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"$error_msg\"}"; \
-              echo "Callback curl exit code: $?"; \
-              # 嘗試備用IP直接訪問
-              echo "Trying direct IP callback..."; \
-              curl -X POST "http://10.233.36.85:8080/api/v1/task/status/$SUBMISSION_ID" \
-                   --max-time 10 \
-                   -v \
-                   -H "Content-Type: application/json" \
-                   -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"Secondary callback: $error_msg\"}"; \
-              echo "Secondary callback curl exit code: $?"; \
             fi; \
             exit $rc
           ' EXIT
@@ -109,8 +104,9 @@ spec:
             s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_results/result_notebook.ipynb
           
           echo "Notifying backend of job completion..."
-          curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
+          curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID/internal" \
                -H "Content-Type: application/json" \
+               -H "X-API-Key: ${INTERNAL_API_KEY}" \
                -d '{"submissionId":"'"$SUBMISSION_ID"'","status":"COMPLETED","resultPath":"s3://'$MINIO_BUCKET'/submissions/'"$USER_ID"'/'"${TIMESTAMP}"'_results/result_notebook.ipynb"}'
           
           echo "Job completed successfully at $(date)"

@@ -83,7 +83,7 @@ spec:
           set -euo pipefail
           exec > >(tee /tmp/job.log) 2>&1
           trap 'echo "Notifying backend of job failure..."; \
-                error_msg=$(sed ':a;N;$!ba;s/"/\\"/g;s/\n/\\n/g' /tmp/job.log); \
+                error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\\n/\\\\n/g" /tmp/job.log); \
                 curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
                      -H "Content-Type: application/json" \
                      -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"$error_msg\"}"; \

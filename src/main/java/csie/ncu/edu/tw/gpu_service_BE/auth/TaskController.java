@@ -2,7 +2,6 @@ package csie.ncu.edu.tw.gpu_service_BE.auth;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
@@ -79,7 +78,7 @@ public class TaskController {
                 
                 try {
                     // 1. 如果任务在队列中，从队列移除
-                    boolean removed = queueService.removeTask(id);
+                    queueService.removeTask(id);
                     
                     // 2. 如果任务已提交到Kubernetes，尝试从K8s删除
                     if (record.getStatus() == TaskExecutionRecord.Status.SCHEDULED) {

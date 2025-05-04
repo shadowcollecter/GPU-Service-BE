@@ -101,12 +101,26 @@ public class AdminQueueController {
             return ResponseEntity.status(404).body(Map.of("errorCode","NOT_FOUND","message","Task not found"));
         }
         TaskExecutionRecord rec = recOpt.get();
-        // choose MinIO object: use resultPath when available, else originalPath
-        String objectName = rec.getResultPath() != null ? rec.getResultPath() : rec.getOriginalPath();
+        // determine path and parse S3 URI if present
+        String path = rec.getResultPath() != null ? rec.getResultPath() : rec.getOriginalPath();
         String action = rec.getResultPath() != null ? "DOWNLOAD_RESULT" : "DOWNLOAD_ORIGINAL";
+        String bucket = bucketName;
+        String objectName;
+        if (path != null && path.startsWith("s3://")) {
+            String withoutScheme = path.substring("s3://".length());
+            int slashIndex = withoutScheme.indexOf('/');
+            if (slashIndex > 0) {
+                bucket = withoutScheme.substring(0, slashIndex);
+                objectName = withoutScheme.substring(slashIndex + 1);
+            } else {
+                objectName = withoutScheme;
+            }
+        } else {
+            objectName = path;
+        }
         try {
             InputStream stream = minioClient.getObject(
-                GetObjectArgs.builder().bucket(bucketName).object(objectName).build());
+                GetObjectArgs.builder().bucket(bucket).object(objectName).build());
             InputStreamResource resource = new InputStreamResource(stream);
             String filename = objectName.substring(objectName.lastIndexOf('/') + 1);
             // audit log success

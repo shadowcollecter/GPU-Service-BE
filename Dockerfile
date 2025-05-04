@@ -20,6 +20,9 @@ FROM eclipse-temurin:17-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/gpu-service-BE-*.jar app.jar
 
+# 複製 customize-yaml 目錄到容器中
+COPY customize-yaml /app/customize-yaml
+
 # 設置環境變數，指定使用k8s配置文件
 ENV SPRING_PROFILES_ACTIVE=k8s
 

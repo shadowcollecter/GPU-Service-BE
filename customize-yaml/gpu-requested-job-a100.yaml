@@ -45,10 +45,7 @@ spec:
             nvidia.com/gpu: "1"
         env:
         - name: CALLBACK_BASE_URL
-          valueFrom:
-            configMapKeyRef:
-              name: job-config
-              key: CALLBACK_BASE_URL
+          value: "http://gpu-service-be.gpu-service.svc.cluster.local:8080/api/v1/task/status"
         - name: SUBMISSION_ID
           valueFrom:
             fieldRef:
@@ -62,25 +59,13 @@ spec:
             fieldRef:
               fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/timestamp']
         - name: MINIO_ENDPOINT
-          valueFrom:
-            configMapKeyRef:
-              name: job-config
-              key: MINIO_ENDPOINT
+          value: "http://minio.gpu-service.svc.cluster.local:9000"
         - name: MINIO_BUCKET
-          valueFrom:
-            configMapKeyRef:
-              name: job-config
-              key: MINIO_BUCKET
+          value: "notebooks"
         - name: AWS_ACCESS_KEY_ID
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: accesskey
+          value: "admin"
         - name: AWS_SECRET_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: secretkey
+          value: "mhAH74T0Wo"
         - name: PRESIGNED_URL
           valueFrom:
             fieldRef:
@@ -102,10 +87,6 @@ spec:
           
           echo "Downloading input notebook..."
           curl -fSL "$PRESIGNED_URL" -o input.ipynb
-          
-          echo "Uploading original notebook to MinIO..."
-          aws --endpoint-url=$MINIO_ENDPOINT s3 cp input.ipynb \
-            s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_original/notebook.ipynb
           
           echo "Running papermill to execute notebook with GPU..."
           papermill input.ipynb output.ipynb \

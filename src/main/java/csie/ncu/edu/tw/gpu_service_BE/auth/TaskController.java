@@ -245,6 +245,11 @@ public class TaskController {
                 // update status
                 String status = (String) payload.get("status");
                 record.setStatus(TaskExecutionRecord.Status.valueOf(status));
+                // on failure, record error message and end time
+                if ("FAILED".equals(status) && payload.containsKey("errorMessage")) {
+                    record.setRejectionReason((String) payload.get("errorMessage"));
+                    record.setEndTime(LocalDateTime.now());
+                }
                 
                 // Ensure resultPath is properly set for completed tasks
                 if (status.equals("COMPLETED")) {

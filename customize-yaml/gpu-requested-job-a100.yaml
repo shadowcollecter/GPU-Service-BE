@@ -81,6 +81,11 @@ spec:
         - -c
         - |
           set -euo pipefail
+          trap 'echo "Notifying backend of job failure..."; \
+                curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
+                     -H "Content-Type: application/json" \
+                     -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"Notebook execution error\"}"; \
+                exit 1' ERR
           echo "Starting A100 GPU job execution at $(date)"
           echo "GPU information:"
           nvidia-smi

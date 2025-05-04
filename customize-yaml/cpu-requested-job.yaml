@@ -103,7 +103,7 @@ spec:
             
             # Optional backward compatibility callback
             if [ -n "${INTERNAL_API_KEY:-}" ]; then
-              error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\n/\\\\n/g" $RESULTS_DIR/error.log | head -c 1000000)
+              error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\n/\\\\n/g" $RESULTS_DIR/error.log | head -c 19000)
               curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID/internal" \
                   -H "Content-Type: application/json" \
                   -H "X-API-Key: ${INTERNAL_API_KEY}" \

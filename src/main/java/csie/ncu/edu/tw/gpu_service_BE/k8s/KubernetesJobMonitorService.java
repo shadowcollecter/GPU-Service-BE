@@ -287,9 +287,9 @@ public class KubernetesJobMonitorService {
                 
                 // Truncate if too long
                 if (errorMessage != null) {
-                    // Limit error message to 1000 characters
-                    String truncatedError = errorMessage.length() > 1000 ? 
-                                           errorMessage.substring(0, 1000) + "..." : 
+                    // Increase error message limit from 1000 to database field capacity (slightly less than 20000)
+                    String truncatedError = errorMessage.length() > 19000 ? 
+                                           errorMessage.substring(0, 19000) + "..." : 
                                            errorMessage;
                     record.setRejectionReason(truncatedError);
                     log.info("Set error message for job {} from Minio error log", record.getSubmissionId());

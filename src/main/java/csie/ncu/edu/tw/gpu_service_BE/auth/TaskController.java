@@ -240,14 +240,18 @@ public class TaskController {
     public ResponseEntity<?> callbackStatus(
             @PathVariable String submissionId,
             @RequestBody Map<String, Object> payload) {
+        log.info("Received callback for submissionId={} with payload={} ", submissionId, payload);
         return taskExecutionRecordRepository.findBySubmissionId(submissionId)
             .map(record -> {
                 // update status
                 String status = (String) payload.get("status");
                 record.setStatus(TaskExecutionRecord.Status.valueOf(status));
-                // on failure, record error message and end time
-                if ("FAILED".equals(status) && payload.containsKey("errorMessage")) {
-                    record.setRejectionReason((String) payload.get("errorMessage"));
+                // on failure, always update error message and end time
+                if ("FAILED".equals(status)) {
+                    String errMsg = payload.containsKey("errorMessage")
+                                    ? (String) payload.get("errorMessage")
+                                    : record.getRejectionReason();
+                    record.setRejectionReason(errMsg);
                     record.setEndTime(LocalDateTime.now());
                 }
                 

@@ -240,11 +240,19 @@ public class TaskController {
     public ResponseEntity<?> callbackStatus(
             @PathVariable String submissionId,
             @RequestBody Map<String, Object> payload) {
-        log.info("Received callback for submissionId={} with payload={} ", submissionId, payload);
+        // Log just the submission ID and status, but truncate error message for readability
+        String status = (String) payload.get("status");
+        if ("FAILED".equals(status) && payload.containsKey("errorMessage")) {
+            String errMsg = (String) payload.get("errorMessage");
+            String truncated = errMsg.length() > 100 ? errMsg.substring(0, 100) + "..." : errMsg;
+            log.info("Received callback for submissionId={} with status={} and errorMessage excerpt: {}", 
+                     submissionId, status, truncated);
+        } else {
+            log.info("Received callback for submissionId={} with payload={}", submissionId, payload);
+        }
         return taskExecutionRecordRepository.findBySubmissionId(submissionId)
             .map(record -> {
                 // update status
-                String status = (String) payload.get("status");
                 record.setStatus(TaskExecutionRecord.Status.valueOf(status));
                 // on failure, always update error message and end time
                 if ("FAILED".equals(status)) {

@@ -31,50 +31,6 @@ spec:
         ports:
         - containerPort: 8080
           name: http
-        env:
-        - name: SPRING_PROFILES_ACTIVE
-          value: "k8s"
-        - name: KUBERNETES_NAMESPACE
-          value: "gpu-service"
-        - name: SPRING_DATASOURCE_URL
-          value: "jdbc:postgresql://postgresql.gpu-service.svc.cluster.local:5432/gpu_service_be"
-        - name: SPRING_DATASOURCE_USERNAME
-          value: "postgres"
-        - name: SPRING_DATASOURCE_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: db-credentials
-              key: password
-        - name: SPRING_DATA_REDIS_HOST
-          value: "redis-master.gpu-service.svc.cluster.local"
-        - name: SPRING_DATA_REDIS_PORT
-          value: "6379"
-        - name: SPRING_DATA_REDIS_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: redis-credentials
-              key: password
-        - name: MINIO_URL
-          value: "http://minio.gpu-service.svc.cluster.local:9000"
-        - name: MINIO_ACCESS_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: access-key
-        - name: MINIO_SECRET_KEY
-          valueFrom:
-            secretKeyRef:
-              name: minio-credentials
-              key: secret-key
-        - name: MINIO_BUCKET_NAME
-          value: "notebooks"
-        - name: JWT_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: jwt-credentials
-              key: secret-key
-        - name: APP_FRONTEND_URL
-          value: "https://jupyterhub.csie.ncu.edu.tw"
         resources:
           requests:
             cpu: "4000m"
@@ -82,6 +38,7 @@ spec:
           limits:
             cpu: "6000m"
             memory: "6Gi"
+        # 啟用健康檢查
         # livenessProbe:
         #   httpGet:
         #     path: /actuator/health/liveness
@@ -89,6 +46,7 @@ spec:
         #   initialDelaySeconds: 60
         #   periodSeconds: 30
         #   failureThreshold: 3
+        #   timeoutSeconds: 5
         # readinessProbe:
         #   httpGet:
         #     path: /actuator/health/readiness
@@ -96,6 +54,14 @@ spec:
         #   initialDelaySeconds: 30
         #   periodSeconds: 20
         #   failureThreshold: 3
+        #   timeoutSeconds: 3
+        # # 添加存活檢查 - Startup Probe
+        # startupProbe:
+        #   httpGet:
+        #     path: /actuator/health
+        #     port: 8080
+        #   failureThreshold: 30
+        #   periodSeconds: 10
 ---
 # 後端服務暴露 (僅供集群內部訪問)
 apiVersion: v1

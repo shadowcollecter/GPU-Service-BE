@@ -58,7 +58,7 @@ public class TaskExecutionRecord {
     @Column(name = "risk_score")
     private Integer riskScore;
 
-    @Column(name = "risk_message", length = 2048)
+    @Column(name = "risk_message", length = 20000)
     private String riskMessage;
 
     public enum Status {

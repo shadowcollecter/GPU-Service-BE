@@ -4,9 +4,9 @@
 CREATE TABLE IF NOT EXISTS users (
     user_id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(2048) NOT NULL UNIQUE,
     role VARCHAR(10) NOT NULL,
-    hashed_password VARCHAR(255),
+    hashed_password VARCHAR(2048),
     created_at TIMESTAMP NOT NULL,
     last_login TIMESTAMP
 );
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS time_adjustment_log (
     user_id VARCHAR(50) NOT NULL,
     admin_id VARCHAR(50) NOT NULL,
     adjustment_amount BIGINT NOT NULL,
-    adjustment_reason VARCHAR(255),
+    adjustment_reason VARCHAR(2048),
     adjusted_at TIMESTAMP NOT NULL,
     FOREIGN KEY (user_id) REFERENCES users(user_id),
     FOREIGN KEY (admin_id) REFERENCES users(user_id)
@@ -72,7 +72,7 @@ CREATE TABLE IF NOT EXISTS time_adjustment_log (
 -- Announcements table
 CREATE TABLE IF NOT EXISTS announcements (
     id BIGSERIAL PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
+    title VARCHAR(2048) NOT NULL,
     content TEXT NOT NULL,
     priority VARCHAR(10) NOT NULL DEFAULT 'NORMAL',
     start_date TIMESTAMP NOT NULL,

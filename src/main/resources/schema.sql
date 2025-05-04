@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS task_execution_record (
     vram_size DOUBLE PRECISION,
     gpu_type VARCHAR(100),
     risk_score INTEGER,
-    risk_message VARCHAR(20000),
+    risk_message VARCHAR(11000000),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 

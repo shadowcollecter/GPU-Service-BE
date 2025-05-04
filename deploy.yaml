@@ -212,6 +212,16 @@ spec:
   - host: jupyterhub.csie.ncu.edu.tw
     http:
       paths:
+      # 新增这段，用于对外 /api 请求转发到 GPU Service 后端
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: gpu-service-be
+            port:
+              number: 8080
+
+      # 原本的前端静态资源转发
       - path: /
         pathType: Prefix
         backend:

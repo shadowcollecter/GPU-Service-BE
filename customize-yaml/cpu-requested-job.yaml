@@ -77,20 +77,45 @@ spec:
         - -c
         - |
           set -euo pipefail
-          exec > >(tee /tmp/job.log) 2>&1
-          trap '
-            rc=$?; \
-            if [ $rc -ne 0 ]; then \
-              echo "Notifying backend of job failure..."; \
-              error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\n/\\\\n/g" /tmp/job.log); \
-              echo "Error message: $error_msg"; \
+          # Create results directory
+          RESULTS_DIR="/tmp/results"
+          RESULT_PATH="s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_results"
+          mkdir -p $RESULTS_DIR
+          
+          # Redirect all outputs to a log file
+          exec > >(tee $RESULTS_DIR/execution.log) 2>&1
+          
+          # Function to save error log and exit
+          save_error_and_exit() {
+            rc=$?
+            echo "Job failed with exit code $rc at $(date)"
+            
+            # Always save the error log to Minio
+            cp $RESULTS_DIR/execution.log $RESULTS_DIR/error.log
+            aws --endpoint-url=$MINIO_ENDPOINT s3 cp $RESULTS_DIR/error.log \
+              $RESULT_PATH/error.log || echo "Failed to upload error log to Minio"
+              
+            # Try to copy any output notebook if it exists
+            if [ -f output.ipynb ]; then
+              aws --endpoint-url=$MINIO_ENDPOINT s3 cp output.ipynb \
+                $RESULT_PATH/partial_result.ipynb || echo "Failed to upload partial result"
+            fi
+            
+            # Optional backward compatibility callback
+            if [ -n "${INTERNAL_API_KEY:-}" ]; then
+              error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\n/\\\\n/g" $RESULTS_DIR/error.log | head -c 1000)
               curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID/internal" \
-                   -H "Content-Type: application/json" \
-                   -H "X-API-Key: ${INTERNAL_API_KEY}" \
-                   -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"$error_msg\"}"; \
-            fi; \
+                  -H "Content-Type: application/json" \
+                  -H "X-API-Key: ${INTERNAL_API_KEY}" \
+                  -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"$error_msg\"}" || true
+            fi
+            
             exit $rc
-          ' EXIT
+          }
+          
+          # Set up trap to save error logs on any failure
+          trap 'save_error_and_exit' ERR EXIT
+          
           echo "Starting job execution at $(date)"
           echo "Downloading input notebook..."
           curl -fSL "$PRESIGNED_URL" -o input.ipynb
@@ -100,13 +125,21 @@ spec:
             --no-progress-bar --log-output
           
           echo "Uploading execution results to MinIO..."
+          # Copy both the output notebook and the log
           aws --endpoint-url=$MINIO_ENDPOINT s3 cp output.ipynb \
-            s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_results/result_notebook.ipynb
+            $RESULT_PATH/result_notebook.ipynb
+          aws --endpoint-url=$MINIO_ENDPOINT s3 cp $RESULTS_DIR/execution.log \
+            $RESULT_PATH/execution.log
           
-          echo "Notifying backend of job completion..."
-          curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID/internal" \
-               -H "Content-Type: application/json" \
-               -H "X-API-Key: ${INTERNAL_API_KEY}" \
-               -d '{"submissionId":"'"$SUBMISSION_ID"'","status":"COMPLETED","resultPath":"s3://'$MINIO_BUCKET'/submissions/'"$USER_ID"'/'"${TIMESTAMP}"'_results/result_notebook.ipynb"}'
+          # Optional backward compatibility callback
+          if [ -n "${INTERNAL_API_KEY:-}" ]; then
+            echo "Sending optional callback notification..."
+            curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID/internal" \
+                -H "Content-Type: application/json" \
+                -H "X-API-Key: ${INTERNAL_API_KEY}" \
+                -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"COMPLETED\",\"resultPath\":\"$RESULT_PATH/result_notebook.ipynb\"}" || true
+          fi
           
           echo "Job completed successfully at $(date)"
+          # Reset trap before normal exit
+          trap - ERR EXIT

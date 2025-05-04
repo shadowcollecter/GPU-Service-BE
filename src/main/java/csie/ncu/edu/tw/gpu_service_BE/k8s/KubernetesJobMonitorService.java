@@ -119,15 +119,7 @@ public class KubernetesJobMonitorService {
                     recordRepo.save(record);
                 }
             } else if (jobFailed) {
-                if (record.getStatus() != TaskExecutionRecord.Status.FAILED) {
-                    log.warn("Job {} failed", submissionId);
-                    record.setStatus(TaskExecutionRecord.Status.FAILED);
-                    record.setEndTime(LocalDateTime.now());
-                    if (record.getRejectionReason() == null || record.getRejectionReason().isEmpty()) {
-                        record.setRejectionReason("Kubernetes job failed");
-                    }
-                    recordRepo.save(record);
-                }
+                // skip marking FAILED here; let callbackStatus handle job failures and rejectionReason
             } else if (status.getActive() != null && status.getActive() > 0) {
                 // 任務正在運行中
                 if (record.getStatus() != TaskExecutionRecord.Status.RUNNING) {

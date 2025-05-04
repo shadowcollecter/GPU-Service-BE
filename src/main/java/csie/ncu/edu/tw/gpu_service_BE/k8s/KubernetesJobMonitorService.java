@@ -158,11 +158,27 @@ public class KubernetesJobMonitorService {
             String submissionId = jobName.substring("task-".length());
             
             // 检查任务状态
-            boolean isCompleted = job.getStatus() != null && 
+            final boolean isCompleted = job.getStatus() != null && 
                                  job.getStatus().getCompletionTime() != null;
-            boolean isFailed = job.getStatus() != null && 
+            final boolean isFailed = job.getStatus() != null && 
                               job.getStatus().getFailed() != null && 
                               job.getStatus().getFailed() > 0;
+            final boolean isDeadlineExceeded;
+            
+            // 检查是否超时失败 (Job 状态为失败，并且条件类型为 DeadlineExceeded)
+            if (job.getStatus() != null && job.getStatus().getConditions() != null) {
+                isDeadlineExceeded = job.getStatus().getConditions().stream()
+                    .anyMatch(condition -> 
+                        "Failed".equals(condition.getType()) && 
+                        "DeadlineExceeded".equals(condition.getReason()));
+                
+                if (isDeadlineExceeded) {
+                    log.warn("Job {} exceeded its deadline/timeout", jobName);
+                    // 不再修改 isFailed 變量，因為它現在是 final 的
+                }
+            } else {
+                isDeadlineExceeded = false;
+            }
             
             if (isCompleted || isFailed) {
                 // 任务已完成或失败，无需跟踪
@@ -179,6 +195,10 @@ public class KubernetesJobMonitorService {
                         rec.setStatus(TaskExecutionRecord.Status.FAILED);
                         if (rec.getEndTime() == null) {
                             rec.setEndTime(LocalDateTime.now());
+                        }
+                        // 如果是超时失败，记录特定的失败原因
+                        if (isDeadlineExceeded) {
+                            rec.setRejectionReason("Job exceeded its execution time limit (timeout)");
                         }
                     }
                     recordRepo.save(rec);

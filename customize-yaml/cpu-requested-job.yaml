@@ -73,12 +73,18 @@ spec:
         - |
           set -euo pipefail
           exec > >(tee /tmp/job.log) 2>&1
-          trap 'echo "Notifying backend of job failure..."; \
-                error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\\n/\\\\n/g" /tmp/job.log); \
-                curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
-                     -H "Content-Type: application/json" \
-                     -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"$error_msg\"}"; \
-                exit 1' ERR
+          trap '
+            rc=$?; \
+            if [ $rc -ne 0 ]; then \
+              echo "Notifying backend of job failure..."; \
+              error_msg=$(sed -e ":a" -e "N;\$!ba" -e "s/\"/\\\\\"/g" -e "s/\n/\\\\n/g" /tmp/job.log); \
+              echo "Error message: $error_msg"; \
+              curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
+                   -H "Content-Type: application/json" \
+                   -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"$error_msg\"}"; \
+            fi; \
+            exit $rc
+          ' EXIT
           echo "Starting job execution at $(date)"
           echo "Downloading input notebook..."
           curl -fSL "$PRESIGNED_URL" -o input.ipynb

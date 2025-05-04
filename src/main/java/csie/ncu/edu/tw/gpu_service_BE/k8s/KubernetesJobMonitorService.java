@@ -119,7 +119,14 @@ public class KubernetesJobMonitorService {
                     recordRepo.save(record);
                 }
             } else if (jobFailed) {
-                // skip marking FAILED here; let callbackStatus handle job failures and rejectionReason
+                // Mark FAILED status when job fails but no callback received
+                if (record.getStatus() != TaskExecutionRecord.Status.FAILED) {
+                    log.warn("Job {} failed without callback, marking FAILED", submissionId);
+                    record.setStatus(TaskExecutionRecord.Status.FAILED);
+                    record.setEndTime(LocalDateTime.now());
+                    // keep existing rejectionReason if set, else default
+                    recordRepo.save(record);
+                }
             } else if (status.getActive() != null && status.getActive() > 0) {
                 // 任務正在運行中
                 if (record.getStatus() != TaskExecutionRecord.Status.RUNNING) {

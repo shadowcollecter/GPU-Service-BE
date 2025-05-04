@@ -32,7 +32,7 @@ CREATE TABLE IF NOT EXISTS task_execution_record (
     duration BIGINT NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    rejection_reason VARCHAR(20000),
+    rejection_reason VARCHAR(1000000),
     result_path VARCHAR(1024),
     original_path VARCHAR(1024),
     resource_type VARCHAR(10),

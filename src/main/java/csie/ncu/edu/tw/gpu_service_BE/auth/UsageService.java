@@ -36,16 +36,34 @@ public class UsageService {
 
     @Transactional
     public void adjustUserTime(String userId, String adminId, long amount, String reason) {
-        UserUsageSummary summary = userUsageSummaryRepository.findById(userId).orElseThrow();
+        LocalDateTime now = LocalDateTime.now();
+        
+        // Try to find existing summary or create a new one if not found
+        UserUsageSummary summary = userUsageSummaryRepository.findById(userId)
+            .orElseGet(() -> {
+                // Create a new usage summary for this user
+                UserUsageSummary newSummary = new UserUsageSummary();
+                newSummary.setUserId(userId);
+                newSummary.setTotalUsedTime(0);
+                newSummary.setRemainingTime(defaultRemainingTimeSec);
+                newSummary.setTimePeriodStart(now);
+                newSummary.setTimePeriodEnd(now.plus(6, ChronoUnit.MONTHS));
+                newSummary.setLastUpdated(now);
+                return newSummary;
+            });
+        
+        // Adjust the remaining time
         summary.setRemainingTime(summary.getRemainingTime() + amount);
-        summary.setLastUpdated(LocalDateTime.now());
+        summary.setLastUpdated(now);
         userUsageSummaryRepository.save(summary);
+        
+        // Log the adjustment
         TimeAdjustmentLog log = new TimeAdjustmentLog();
         log.setUserId(userId);
         log.setAdminId(adminId);
         log.setAdjustmentAmount(amount);
         log.setAdjustmentReason(reason);
-        log.setAdjustedAt(LocalDateTime.now());
+        log.setAdjustedAt(now);
         timeAdjustmentLogRepository.save(log);
     }
 

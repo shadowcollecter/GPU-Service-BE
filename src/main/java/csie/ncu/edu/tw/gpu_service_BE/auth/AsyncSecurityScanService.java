@@ -41,6 +41,7 @@ import csie.ncu.edu.tw.gpu_service_BE.auth.SecurityConfigService;
 import csie.ncu.edu.tw.gpu_service_BE.auth.QueueService;
 import csie.ncu.edu.tw.gpu_service_BE.auth.TaskInfo;
 import csie.ncu.edu.tw.gpu_service_BE.config.GpuConfigProperties;
+import csie.ncu.edu.tw.gpu_service_BE.k8s.DirectKubernetesSchedulerService;
 
 @Service
 public class AsyncSecurityScanService {
@@ -66,6 +67,8 @@ public class AsyncSecurityScanService {
     private BatchV1Api batchV1Api;
     @Autowired
     private GpuConfigProperties gpuConfig;
+    @Autowired
+    private DirectKubernetesSchedulerService kubernetesService;
     
     @Value("${minio.bucket.name}")
     private String bucketName;
@@ -187,63 +190,10 @@ public class AsyncSecurityScanService {
                         rec.setEndTime(LocalDateTime.now());
                         rec.setRejectionReason("Risk score " + riskScore);
                     } else {
-                        // Task passed security check - handle according to submit mode
-                        if ("direct".equalsIgnoreCase(taskSubmitMode)) {
-                            // Direct submission to Kubernetes
-                            try {
-                                // Create task info for either mode
-                                TaskInfo info = new TaskInfo(
-                                    submissionId,
-                                    rec.getUserId(),
-                                    rec.getResourceType() == TaskExecutionRecord.ResourceType.GPU,
-                                    rec.getVramSize(),
-                                    rec.getGpuType(),
-                                    Instant.now(),
-                                    null, // clientInfo
-                                    null  // clientIp
-                                );
-                                
-                                // Determine template based on GPU requirements
-                                String templateFile = !info.isGpuRequired()
-                                        ? gpuConfig.getCpu().getYaml()
-                                        : gpuConfig.getTypes().stream()
-                                                .filter(c -> c.getType().equals(info.getGpuType()))
-                                                .map(GpuConfigProperties.GpuTypeConfig::getYaml)
-                                                .findFirst().orElse(gpuConfig.getCpu().getYaml());
-                                
-                                // Read template file and prepare job
-                                String template = Files.readString(Path.of(jobTemplateDir, templateFile));
-                                String timestamp = submissionId.substring(submissionId.length() - 14);
-                                String presignUrl = presignService.getPresignedUrl(rec.getOriginalPath(), 3600);
-                                
-                                // Replace placeholders in template
-                                String jobYaml = template
-                                    .replace("${SUBMISSION_ID}", submissionId)
-                                    .replace("${USER_ID}", rec.getUserId())
-                                    .replace("${TIMESTAMP}", timestamp)
-                                    .replace("${PRESIGN_URL}", presignUrl)
-                                    .replace("${GPU_TYPE}", rec.getGpuType() != null ? rec.getGpuType() : "");
-                                
-                                // Parse YAML and submit job
-                                Yaml yaml = new Yaml();
-                                V1Job job = yaml.loadAs(jobYaml, V1Job.class);
-                                var container = job.getSpec().getTemplate().getSpec().getContainers().get(0);
-                                container.setImage(jobImage);
-                                job.getMetadata().setName("task-" + submissionId);
-                                
-                                // Submit to K8s directly
-                                batchV1Api.createNamespacedJob(k8sNamespace, job, null, null, null, null);
-                                rec.setStatus(TaskExecutionRecord.Status.SCHEDULED);
-                                logger.info("Task {} submitted directly to Kubernetes after passing security scan", submissionId);
-                            } catch (Exception e) {
-                                logger.error("Failed to submit task {} directly to Kubernetes: {}", submissionId, e.getMessage(), e);
-                                // Fallback to queue mode if direct submission fails
-                                submitToQueue(rec);
-                            }
-                        } else {
-                            // Default queue mode
-                            submitToQueue(rec);
-                        }
+                        // 无论是queue模式还是direct模式，现在都统一使用Redis队列
+                        // 将任务添加到Redis队列，由KubernetesJobMonitorService负责提交到K8s
+                        submitToQueue(rec);
+                        logger.info("Task {} passed security check and was added to Redis queue", submissionId);
                     }
                     taskRecordRepo.save(rec);
                 });

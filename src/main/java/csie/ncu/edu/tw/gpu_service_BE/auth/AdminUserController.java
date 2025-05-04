@@ -14,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.HashMap;
+import java.util.Optional;
 
 import csie.ncu.edu.tw.gpu_service_BE.auth.UserUsageSummary;
 import csie.ncu.edu.tw.gpu_service_BE.auth.UserUsageSummaryRepository;
@@ -45,22 +46,31 @@ public class AdminUserController {
         } else {
             users = userRepository.findAll(pageable);
         }
-        var result = Map.of(
-            "items", users.getContent().stream().map(u -> Map.of(
-                "userId", u.getUserId(),
-                "name", u.getName(),
-                "email", u.getEmail(),
-                "role", u.getRole(),
-                "remainingTime", userUsageSummaryRepository.findById(u.getUserId())
-                                    .map(UserUsageSummary::getRemainingTime).orElse(0L),
-                "totalTime", userUsageSummaryRepository.findById(u.getUserId())
-                                    .map(UserUsageSummary::getTotalUsedTime).orElse(0L),
-                "taskCount", taskExecutionRecordRepository.countByUserId(u.getUserId()),
-                "createdAt", u.getCreatedAt().format(DateTimeFormatter.ISO_DATE_TIME),
-                "lastLogin", u.getLastLogin() != null ? u.getLastLogin().format(DateTimeFormatter.ISO_DATE_TIME) : null
-            )).collect(Collectors.toList()),
-            "total", users.getTotalElements()
-        );
+        
+        var userItems = users.getContent().stream().map(u -> {
+            // Create a HashMap instead of using Map.of() to handle null values
+            HashMap<String, Object> userMap = new HashMap<>();
+            userMap.put("userId", u.getUserId());
+            userMap.put("name", u.getName());
+            userMap.put("email", u.getEmail());
+            userMap.put("role", u.getRole());
+            userMap.put("remainingTime", userUsageSummaryRepository.findById(u.getUserId())
+                                    .map(UserUsageSummary::getRemainingTime).orElse(0L));
+            userMap.put("totalTime", userUsageSummaryRepository.findById(u.getUserId())
+                                    .map(UserUsageSummary::getTotalUsedTime).orElse(0L));
+            userMap.put("taskCount", taskExecutionRecordRepository.countByUserId(u.getUserId()));
+            userMap.put("createdAt", u.getCreatedAt().format(DateTimeFormatter.ISO_DATE_TIME));
+            // Handle null lastLogin safely
+            userMap.put("lastLogin", u.getLastLogin() != null ? 
+                                  u.getLastLogin().format(DateTimeFormatter.ISO_DATE_TIME) : "");
+            return userMap;
+        }).collect(Collectors.toList());
+        
+        // Create a HashMap for the result to handle potential null values
+        HashMap<String, Object> result = new HashMap<>();
+        result.put("items", userItems);
+        result.put("total", users.getTotalElements());
+        
         return ResponseEntity.ok(result);
     }
 
@@ -100,9 +110,18 @@ public class AdminUserController {
         String email = body.get("email");
         String rawPwd = body.get("password");
         String roleStr = body.get("role");
-        if (userRepository.existsById(userId) || userRepository.findByEmail(email).isPresent()) {
-            return ResponseEntity.status(409).body(Map.of("error", "User already exists"));
+        
+        // Check if we're updating an existing user
+        Optional<User> existingUser = userRepository.findById(userId);
+        if (existingUser.isPresent()) {
+            return updateExistingUser(existingUser.get(), name, email, rawPwd, roleStr);
         }
+        
+        // Check if email already exists with different userId
+        if (userRepository.findByEmail(email).isPresent()) {
+            return ResponseEntity.status(409).body(Map.of("error", "Email already in use"));
+        }
+        
         User newUser = new User();
         newUser.setUserId(userId);
         newUser.setName(name);
@@ -113,6 +132,7 @@ public class AdminUserController {
         newUser.setCreatedAt(now);
         newUser.setLastLogin(now);
         userRepository.save(newUser);
+        
         // init usage summary
         UserUsageSummary sum = new UserUsageSummary();
         sum.setUserId(userId);
@@ -123,6 +143,41 @@ public class AdminUserController {
         sum.setLastUpdated(now);
         userUsageSummaryRepository.save(sum);
         return ResponseEntity.ok(Map.of("userId", userId, "message", "User created"));
+    }
+    
+    /**
+     * Updates an existing user's information
+     */
+    private ResponseEntity<?> updateExistingUser(User user, String name, String email, 
+                                               String rawPwd, String roleStr) {
+        // Update basic information
+        user.setName(name);
+        
+        // Only update email if it's different and not already taken by another user
+        if (!user.getEmail().equals(email)) {
+            Optional<User> existingEmail = userRepository.findByEmail(email);
+            if (existingEmail.isPresent() && !existingEmail.get().getUserId().equals(user.getUserId())) {
+                return ResponseEntity.status(409).body(Map.of("error", "Email already in use by another user"));
+            }
+            user.setEmail(email);
+        }
+        
+        // Update role if provided
+        if (roleStr != null && !roleStr.isEmpty()) {
+            try {
+                user.setRole(User.Role.valueOf(roleStr.toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.status(400).body(Map.of("error", "Invalid role: " + roleStr));
+            }
+        }
+        
+        // Update password if provided
+        if (rawPwd != null && !rawPwd.isEmpty()) {
+            user.setHashedPassword(passwordEncoder.encode(rawPwd));
+        }
+        
+        userRepository.save(user);
+        return ResponseEntity.ok(Map.of("userId", user.getUserId(), "message", "User updated"));
     }
 
     @DeleteMapping("/{userId}")

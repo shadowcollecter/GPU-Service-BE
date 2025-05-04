@@ -7,8 +7,8 @@ metadata:
     gpu-service-be.csie.ncu.edu.tw/submission-id: "${SUBMISSION_ID}"
     gpu-service-be.csie.ncu.edu.tw/user-id:       "${USER_ID}"
     gpu-service-be.csie.ncu.edu.tw/timestamp:     "${TIMESTAMP}"
-    gpu-service-be.csie.ncu.edu.tw/presign-url: "${PRESIGN_URL}"
-    # gpu-service-be.csie.ncu.edu.tw/gpu-type:      "${GPU_TYPE}"
+    gpu-service-be.csie.ncu.edu.tw/presign-url:   "${PRESIGN_URL}"
+    gpu-service-be.csie.ncu.edu.tw/gpu-type:      "CPU"
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 300    # auto delete Job/Pods 5min after finish (success or failure)
@@ -17,18 +17,27 @@ spec:
     metadata:
       labels:
         runai/queue: cpu-queue
+        app: notebook-runner
+        resource-type: cpu
       annotations:
         gpu-service-be.csie.ncu.edu.tw/submission-id: "${SUBMISSION_ID}"
         gpu-service-be.csie.ncu.edu.tw/user-id:       "${USER_ID}"
         gpu-service-be.csie.ncu.edu.tw/timestamp:     "${TIMESTAMP}"
-        # gpu-service-be.csie.ncu.edu.tw/gpu-type:      "${GPU_TYPE}"
+        gpu-service-be.csie.ncu.edu.tw/presign-url:   "${PRESIGN_URL}"
+        gpu-service-be.csie.ncu.edu.tw/gpu-type:      "CPU"
     spec:
-      schedulerName: kai-scheduler
       restartPolicy: Never
       serviceAccountName: gpu-service-be-account
       containers:
       - name: runner
-        image: myregistry/ipynb-runner:latest
+        image: shadowcollect/ipynb-runner:latest
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
         env:
         - name: PRESIGNED_URL
           valueFrom:
@@ -72,25 +81,31 @@ spec:
             fieldRef:
               fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/timestamp']
         - name: GPU_TYPE
-          valueFrom:
-            fieldRef:
-              # fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/gpu-type']
+          value: "CPU"
         command:
         - /bin/bash
         - -c
         - |
           set -euo pipefail
-          # 下载输入 notebook
+          echo "Starting job execution at $(date)"
+          echo "Downloading input notebook..."
           curl -fSL "$PRESIGNED_URL" -o input.ipynb
-          # 上传原始 notebook
+          
+          echo "Uploading original notebook to MinIO..."
           aws --endpoint-url=$MINIO_ENDPOINT s3 cp input.ipynb \
             s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_original/notebook.ipynb
+          
+          echo "Running papermill to execute notebook..."
           papermill input.ipynb output.ipynb \
             --no-progress-bar --log-output
-          # 上传执行结果
+          
+          echo "Uploading execution results to MinIO..."
           aws --endpoint-url=$MINIO_ENDPOINT s3 cp output.ipynb \
             s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_results/result_notebook.ipynb
-          # 通知后台：带上路径
+          
+          echo "Notifying backend of job completion..."
           curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
                -H "Content-Type: application/json" \
                -d '{"submissionId":"'"$SUBMISSION_ID"'","status":"COMPLETED","resultPath":"s3://'$MINIO_BUCKET'/submissions/'"$USER_ID"'/'"${TIMESTAMP}"'_results/result_notebook.ipynb"}'
+          
+          echo "Job completed successfully at $(date)"

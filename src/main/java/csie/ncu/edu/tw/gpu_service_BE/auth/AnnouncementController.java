@@ -33,8 +33,45 @@ public class AnnouncementController {
                                                @RequestParam(defaultValue = "10") int size) {
         Pageable pageable = PageRequest.of(page, size);
         LocalDateTime now = LocalDateTime.now();
+
+        // 輸出診斷日誌
+        System.out.println("Fetching announcements at time: " + now);
+
         Page<Announcement> result = announcementRepository.findByStartDateBeforeAndEndDateAfterOrderByPriorityDescStartDateDesc(now, now, pageable);
+
+        // 輸出找到的公告數量
+        System.out.println("Found " + result.getTotalElements() + " active announcements");
+
         return ResponseEntity.ok(Map.of("announcements", result.getContent(), "total", result.getTotalElements()));
+    }
+
+    // 管理員查詢所有公告（不論有效期）
+    @GetMapping("/api/v1/admin/announcements/all")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> listAllAnnouncements(@RequestParam(defaultValue = "0") int page,
+                                                 @RequestParam(defaultValue = "10") int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Page<Announcement> result = announcementRepository.findAll(pageable);
+
+        // 加入診斷信息
+        LocalDateTime now = LocalDateTime.now();
+        StringBuilder debug = new StringBuilder();
+        debug.append("Current time: ").append(now).append("\n");
+
+        for (Announcement a : result.getContent()) {
+            debug.append("ID: ").append(a.getId())
+                 .append(", Title: ").append(a.getTitle())
+                 .append(", StartDate: ").append(a.getStartDate())
+                 .append(", EndDate: ").append(a.getEndDate())
+                 .append(", IsValid: ").append(a.getStartDate().isBefore(now) && a.getEndDate().isAfter(now))
+                 .append("\n");
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "announcements", result.getContent(), 
+            "total", result.getTotalElements(),
+            "debug", debug.toString()
+        ));
     }
 
     // 新增公告（僅 ADMIN）

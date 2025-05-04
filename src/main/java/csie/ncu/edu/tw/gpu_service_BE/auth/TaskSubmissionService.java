@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import csie.ncu.edu.tw.gpu_service_BE.config.GpuConfigProperties;
 import csie.ncu.edu.tw.gpu_service_BE.config.GpuConfigProperties.GpuTypeConfig;
 
-import org.springframework.scheduling.TaskScheduler;
 import java.util.Date;
 
 @Service
@@ -60,9 +59,6 @@ public class TaskSubmissionService {
 
     @Value("${kubernetes.namespace}")
     private String k8sNamespace;
-
-    @Autowired
-    private TaskScheduler taskScheduler;
     
     // LLM Scan Queue
     @Autowired

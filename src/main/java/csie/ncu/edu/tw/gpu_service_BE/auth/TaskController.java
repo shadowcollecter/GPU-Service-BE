@@ -36,6 +36,9 @@ public class TaskController {
     @Autowired
     private MinioPresignService presignService;
 
+    @Autowired
+    private csie.ncu.edu.tw.gpu_service_BE.k8s.DirectKubernetesSchedulerService kubernetesService;
+
     @GetMapping("/list")
     public ResponseEntity<?> listTasks(@RequestParam int page, @RequestParam int size, Authentication auth) {
         Pageable pageable = PageRequest.of(page, size, Sort.by("createdAt").descending());
@@ -49,22 +52,63 @@ public class TaskController {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String userId = auth.getName();
         boolean isAdmin = auth.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
-        // 只允許自己或管理員取消
-        var pendingTasks = queueService.getPendingTasks(null);
-        var taskOpt = pendingTasks.stream().filter(t -> t.getSubmissionId().equals(id)).findFirst();
-        if (taskOpt.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("errorCode", "NOT_FOUND", "message", "Task not found in queue"));
-        }
-        var task = taskOpt.get();
-        if (!isAdmin && !task.getUserId().equals(userId)) {
-            return ResponseEntity.status(403).body(Map.of("errorCode", "ACCESS_DENIED", "message", "You are not authorized to cancel this task."));
-        }
-        boolean removed = queueService.removeTask(id);
-        if (removed) {
-            return ResponseEntity.ok(Map.of("message", "Task cancelled"));
-        } else {
-            return ResponseEntity.status(404).body(Map.of("errorCode", "NOT_FOUND", "message", "Task not found in queue"));
-        }
+        
+        // 检查数据库中的任务记录
+        return taskExecutionRecordRepository.findBySubmissionId(id)
+            .map(record -> {
+                // 检查权限 - 只允许自己或管理员取消
+                if (!isAdmin && !record.getUserId().equals(userId)) {
+                    return ResponseEntity.status(403).body(Map.of(
+                        "errorCode", "ACCESS_DENIED", 
+                        "message", "You are not authorized to cancel this task."
+                    ));
+                }
+                
+                // 检查任务状态 - 只能取消PENDING或SCHEDULED状态的任务
+                if (record.getStatus() != TaskExecutionRecord.Status.PENDING && 
+                    record.getStatus() != TaskExecutionRecord.Status.SCHEDULED) {
+                    return ResponseEntity.status(400).body(Map.of(
+                        "errorCode", "INVALID_STATE", 
+                        "message", "Only pending or scheduled tasks can be cancelled."
+                    ));
+                }
+                
+                try {
+                    // 1. 如果任务在队列中，从队列移除
+                    boolean removed = queueService.removeTask(id);
+                    
+                    // 2. 如果任务已提交到Kubernetes，尝试从K8s删除
+                    if (record.getStatus() == TaskExecutionRecord.Status.SCHEDULED) {
+                        try {
+                            kubernetesService.deleteJob(id);
+                            log.info("Kubernetes job for task {} deleted", id);
+                        } catch (Exception e) {
+                            log.warn("Failed to delete Kubernetes job for task {}: {}", id, e.getMessage());
+                            // 继续处理，即使Kubernetes删除失败
+                        }
+                    }
+                    
+                    // 3. 更新任务状态为已取消
+                    record.setStatus(TaskExecutionRecord.Status.CANCELLED);
+                    record.setEndTime(LocalDateTime.now());
+                    taskExecutionRecordRepository.save(record);
+                    
+                    return ResponseEntity.ok(Map.of(
+                        "message", "Task cancelled successfully",
+                        "status", "CANCELLED"
+                    ));
+                } catch (Exception e) {
+                    log.error("Error cancelling task {}: {}", id, e.getMessage(), e);
+                    return ResponseEntity.status(500).body(Map.of(
+                        "errorCode", "CANCEL_ERROR", 
+                        "message", "Error cancelling task: " + e.getMessage()
+                    ));
+                }
+            })
+            .orElseGet(() -> ResponseEntity.status(404).body(Map.of(
+                "errorCode", "NOT_FOUND", 
+                "message", "Task not found."
+            )));
     }
 
     @PostMapping(value = "/submit", consumes = {"multipart/form-data"})

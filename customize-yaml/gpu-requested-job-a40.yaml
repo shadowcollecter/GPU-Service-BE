@@ -2,11 +2,13 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: notebook-gpu-job
-  namespace: kai-scheduler
+  namespace: gpu-service
   annotations:
     gpu-service-be.csie.ncu.edu.tw/submission-id: "${SUBMISSION_ID}"
     gpu-service-be.csie.ncu.edu.tw/user-id:       "${USER_ID}"
     gpu-service-be.csie.ncu.edu.tw/timestamp:     "${TIMESTAMP}"
+    gpu-service-be.csie.ncu.edu.tw/presign-url:   "${PRESIGN_URL}"
+    gpu-service-be.csie.ncu.edu.tw/gpu-type:      "NVIDIA-A40-48GB-PCIe"
 spec:
   backoffLimit: 0
   ttlSecondsAfterFinished: 300    # auto delete Job/Pods 5min after finish (success or failure)
@@ -15,14 +17,18 @@ spec:
     metadata:
       labels:
         runai/queue: gpu-queue-a40
+        app: notebook-runner
+        resource-type: gpu
+        gpu-type: a40
       annotations:
         gpu-service-be.csie.ncu.edu.tw/submission-id: "${SUBMISSION_ID}"
         gpu-service-be.csie.ncu.edu.tw/user-id:       "${USER_ID}"
         gpu-service-be.csie.ncu.edu.tw/timestamp:     "${TIMESTAMP}"
+        gpu-service-be.csie.ncu.edu.tw/presign-url:   "${PRESIGN_URL}"
+        gpu-service-be.csie.ncu.edu.tw/gpu-type:      "NVIDIA-A40-48GB-PCIe"
     spec:
       nodeSelector:
         nvidia.com/gpu.product: NVIDIA-A40-48GB-PCIe
-      schedulerName: kai-scheduler
       restartPolicy: Never
       serviceAccountName: gpu-service-be-account
       containers:
@@ -30,11 +36,13 @@ spec:
         image: shadowcollect/ipynb-runner:latest
         resources:
           requests:
-            cpu:    "500m"
-            memory: "1Gi"
+            cpu:    "1"
+            memory: "4Gi"
             nvidia.com/gpu: "1"
-            # 如果使用 40GiB MIG：
-            # nvidia.com/mig-1g.40gb: "1"
+          limits:
+            cpu:    "2"
+            memory: "8Gi"
+            nvidia.com/gpu: "1"
         env:
         - name: CALLBACK_BASE_URL
           valueFrom:
@@ -73,19 +81,43 @@ spec:
             secretKeyRef:
               name: minio-credentials
               key: secretkey
+        - name: PRESIGNED_URL
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/presign-url']
+        - name: GPU_TYPE
+          value: "NVIDIA-A40-48GB-PCIe"
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "all"
+        - name: NVIDIA_DRIVER_CAPABILITIES
+          value: "compute,utility"
         command:
         - /bin/bash
         - -c
         - |
           set -euo pipefail
-          # 上传原始 notebook
+          echo "Starting A40 GPU job execution at $(date)"
+          echo "GPU information:"
+          nvidia-smi
+          
+          echo "Downloading input notebook..."
+          curl -fSL "$PRESIGNED_URL" -o input.ipynb
+          
+          echo "Uploading original notebook to MinIO..."
           aws --endpoint-url=$MINIO_ENDPOINT s3 cp input.ipynb \
             s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_original/notebook.ipynb
+          
+          echo "Running papermill to execute notebook with GPU..."
           papermill input.ipynb output.ipynb \
             --no-progress-bar --log-output
-          # 上传执行结果
+          
+          echo "Uploading execution results to MinIO..."
           aws --endpoint-url=$MINIO_ENDPOINT s3 cp output.ipynb \
             s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_results/result_notebook.ipynb
+          
+          echo "Notifying backend of job completion..."
           curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
                -H "Content-Type: application/json" \
                -d '{"submissionId":"'"$SUBMISSION_ID"'","status":"COMPLETED","resultPath":"s3://'$MINIO_BUCKET'/submissions/'"$USER_ID"'/'"${TIMESTAMP}"'_results/result_notebook.ipynb"}'
+          
+          echo "A40 GPU job completed successfully at $(date)"

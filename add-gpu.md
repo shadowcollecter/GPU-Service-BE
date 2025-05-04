@@ -1,6 +1,6 @@
 # 如何新增 GPU 類型
 
-**日期**：2025-05-03
+**日期**：2025-05-04
 
 本指南針對運維／後端工程師，說明在系統中新增一種 GPU 類型的完整流程，包含 Job 模板、後端配置與管理介面三大步驟。
 
@@ -11,7 +11,8 @@
 1. 後端已實現動態讀取 `application.properties`（或 Helm `values.yaml`）中  
    `gpu.types[N].yaml` → 模板檔案名稱 的映射。  
 2. 管理介面（Admin）提供了 `/api/v1/admin/gpus` 的 GET/POST/DELETE，讀寫 `gpu_type` 資料表。  
-3. Kubernetes 集群中有對應的 Queue CRD（如 `gpu-queue-a100`、`gpu-queue-a40`），可根據註解調度。
+3. 系統使用 Redis 隊列存儲任務，並通過 `KubernetesJobMonitorService` 從隊列中提取任務並提交到 Kubernetes。
+4. 任務依賴 `customize-yaml` 目錄中的 YAML 模板提交到 Kubernetes。
 
 ---
 
@@ -23,37 +24,34 @@
    cp gpu-requested-job-a40.yaml gpu-requested-job-v100.yaml
    ```
 2. **編輯新模板**  
-   - 修改 `metadata.labels.runai/queue` → 你的新隊列名稱（例如 `gpu-v100-queue`）  
-   - 在 annotations 區塊新增：  
+   - 修改 `metadata.labels` 和 `nodeSelector` 以適配新的 GPU 類型
+   - 確保 annotations 區塊包含：
      ```yaml
      gpu-service-be.csie.ncu.edu.tw/gpu-type: "${GPU_TYPE}"
      ```  
-   - 在 container env 區塊新增：
+   - 如有特殊資源請求，修改 `resources.requests.nvidia.com/...` 參數
+   - 確保回調腳本正確設置（保持不變）:
      ```yaml
-     - name: GPU_TYPE
-       valueFrom:
-         fieldRef:
-           fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/gpu-type']
+     command:
+     - /bin/bash
+     - -c
+     - |
+       set -euo pipefail
+       # 上传原始 notebook
+       aws --endpoint-url=$MINIO_ENDPOINT s3 cp input.ipynb \
+         s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_original/notebook.ipynb
+       papermill input.ipynb output.ipynb \
+         --no-progress-bar --log-output
+       # 上传执行结果
+       aws --endpoint-url=$MINIO_ENDPOINT s3 cp output.ipynb \
+         s3://$MINIO_BUCKET/submissions/$USER_ID/${TIMESTAMP}_results/result_notebook.ipynb
+       curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
+            -H "Content-Type: application/json" \
+            -d '{"submissionId":"'"$SUBMISSION_ID"'","status":"COMPLETED","resultPath":"s3://'$MINIO_BUCKET'/submissions/'"$USER_ID"'/'"${TIMESTAMP}"'_results/result_notebook.ipynb"}'
      ```
-   - 如有特殊資源請求，修改 `resources.requests.nvidia.com/...` 參數。
 
-3. **（可選）新增 Queue CRD**  
-   若需要新隊列，於 `customize-yaml/` 加入 `gpu-queue-v100.yaml`：
-   ```yaml
-   apiVersion: scheduling.run.ai/v2
-   kind: Queue
-   metadata: 
-     name: gpu-queue-v100
-   spec:
-     priority: 80
-     resources:
-       cpu:
-         quota: 0
-       gpu:
-         quota: 1
-       memory:
-         quota: -1
-   ```
+3. **注意回調機制**  
+   模板中的回調腳本（curl 命令）會在任務完成後向後端報告狀態，確保 callback URL 指向正確的服務端點。這是任務完成後更新狀態的關鍵機制。
 
 ---
 
@@ -68,9 +66,12 @@
      gpu.types[2].yaml=gpu-requested-job-v100.yaml
      gpu.types[2].queue=gpu-queue-v100
 
-     # 同步將 queue 名稱加入
-     queue.names=${queue.names},gpu-queue-v100
+     # 同步將 queue 名稱和 Redis 鍵加入
+     queue.names=cpu-queue,gpu-queue-a100,gpu-queue-a40,gpu-queue-v100
      queue.redisKeys.gpu-queue-v100=task_queue_v100
+     
+     # 設置 V100 的並發限制（可選）
+     k8s.job.concurrent-limit.nvidia-v100-16gb=1
      ```
 
    - 若使用 Helm，修改 `charts/gpu-service-be/values.yaml`：
@@ -94,7 +95,18 @@
          gpu-queue-v100: task_queue_v100  # 新增
      ```
 
-2. **重新啟動後端服務**  
+2. **確保 Redis 和任務監控配置正確**
+   ```properties
+   # Redis 隊列模式配置
+   task.submit.mode=queue
+   
+   # K8s 任務監控和清理配置
+   k8s.job.monitor.interval-ms=10000
+   k8s.job.clean.completed-jobs-ttl-seconds=3600
+   k8s.job.clean.failed-jobs=true
+   ```
+
+3. **重新啟動後端服務**  
    ```bash
    ./gradlew bootRun --args='--spring.profiles.active=dev'
    ```  
@@ -110,6 +122,7 @@
    NVIDIA-V100-16GB
    ```
 3. 提交後，可於下拉清單或呼叫 API `GET /api/v1/admin/gpus` 查看新加項。
+4. 確保將 `enabled` 設置為 `true`，使該 GPU 類型可在前端被選擇。
 
 ---
 
@@ -117,20 +130,28 @@
 
 1. **提交任務**  
    - 在前端提交一個 `gpuRequired=true`、`gpuType=NVIDIA-V100-16GB` 的作業。  
-2. **檢查 Kubernetes**  
+2. **檢查 Redis 隊列**
+   - 使用 Redis CLI 檢查隊列：`redis-cli -h <host> -p <port> -a <password> LRANGE task_queue_v100 0 -1`
+   - 確認任務已被正確添加到隊列中
+3. **檢查 Kubernetes**  
    - `kubectl get jobs -n gpu-service`  
-   - 確認新 Job 有 annotation：  
-     ```
-     gpu-service-be.csie.ncu.edu.tw/gpu-type=NVIDIA-V100-16GB
-     ```  
-   - 確認 Pod 使用了 `gpu-queue-v100` 或指定隊列。  
-3. **後端記錄**  
+   - 確認從隊列中提取的任務已被提交到 Kubernetes
+   - 確認 Job 有正確的 annotation
+4. **後端記錄**  
    - 檢查 `task_execution_record.gpu_type` 欄位已存入 `NVIDIA-V100-16GB`。
+   - 任務完成後，確認 `status` 已更新為 `COMPLETED` 或 `FAILED`。
 
 完成以上步驟，即可將新 GPU 類型無縫接入整體排程與管理平台。
 
+## 六、任務處理流程說明
 
-## 目前有的gpu類型
+1. **任務提交**：用戶提交任務後，任務經過安全檢查，被添加到對應 GPU 類型的 Redis 隊列
+2. **隊列監控**：`KubernetesJobMonitorService` 定期（默認 10 秒）監控 Kubernetes 中的任務狀態
+3. **任務調度**：當 Kubernetes 中特定 GPU 類型的運行任務數低於並發限制時，從對應隊列提取新任務
+4. **任務執行**：任務在 Kubernetes 中執行，完成後通過回調 API 更新狀態
+5. **資源清理**：已完成或失敗的任務會在 TTL 過期後被自動清理
+
+## 目前有的 GPU 類型
 
 - NVIDIA-A100-80GB-PCIe
 - NVIDIA-A40-48GB-PCIe

@@ -44,4 +44,7 @@ public interface TaskExecutionRecordRepository extends JpaRepository<TaskExecuti
     long countByStatusAndResourceType(TaskExecutionRecord.Status status, TaskExecutionRecord.ResourceType resourceType);
     
     long countByStatusAndResourceTypeAndGpuType(TaskExecutionRecord.Status status, TaskExecutionRecord.ResourceType resourceType, String gpuType);
+    
+    // Method to find all tasks with a specific status
+    List<TaskExecutionRecord> findByStatus(TaskExecutionRecord.Status status);
 }

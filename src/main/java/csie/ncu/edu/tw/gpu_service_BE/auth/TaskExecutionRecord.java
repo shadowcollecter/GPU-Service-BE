@@ -34,13 +34,13 @@ public class TaskExecutionRecord {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(length = 255)
+    @Column(length = 20000)
     private String rejectionReason;
 
-    @Column(name = "result_path")
+    @Column(name = "result_path", length = 1024)
     private String resultPath;
 
-    @Column(name = "original_path")
+    @Column(name = "original_path", length = 1024)
     private String originalPath;
 
     // requested resource and parameters

@@ -32,9 +32,14 @@ CREATE TABLE IF NOT EXISTS task_execution_record (
     duration BIGINT NOT NULL DEFAULT 0,
     status VARCHAR(20) NOT NULL,
     created_at TIMESTAMP NOT NULL,
-    rejection_reason VARCHAR(255),
-    result_path VARCHAR(255),
-    original_path VARCHAR(255),
+    rejection_reason VARCHAR(20000),
+    result_path VARCHAR(1024),
+    original_path VARCHAR(1024),
+    resource_type VARCHAR(10),
+    vram_size DOUBLE PRECISION,
+    gpu_type VARCHAR(100),
+    risk_score INTEGER,
+    risk_message VARCHAR(20000),
     FOREIGN KEY (user_id) REFERENCES users(user_id)
 );
 

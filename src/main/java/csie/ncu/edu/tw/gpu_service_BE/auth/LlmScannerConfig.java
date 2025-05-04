@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.transaction.annotation.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,8 +57,10 @@ public class LlmScannerConfig {
      * Process tasks from the scan queue at a rate-limited pace.
      * This scheduled method runs frequently to check for new tasks but will
      * only process them according to the rate limiter's constraints.
+     * Added @Transactional to ensure proper connection management.
      */
     @Scheduled(fixedDelayString = "${llm.scanner.poll-interval-ms:500}")
+    @Transactional(readOnly = true)
     public void processScanQueue() {
         BlockingQueue<ScanTask> queue = scanQueue();
         if (queue.isEmpty()) return;

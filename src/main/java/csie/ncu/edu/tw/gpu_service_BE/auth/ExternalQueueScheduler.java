@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import io.kubernetes.client.openapi.models.V1Job;
 import org.yaml.snakeyaml.Yaml;
 import java.nio.file.Files;
@@ -105,6 +106,7 @@ public class ExternalQueueScheduler {
     /**
      * 處理單個任務的提交邏輯
      */
+    @Transactional
     private void processTask(TaskInfo info, String submissionId) {
         recordRepo.findBySubmissionId(submissionId).ifPresent(rec -> {
             try {

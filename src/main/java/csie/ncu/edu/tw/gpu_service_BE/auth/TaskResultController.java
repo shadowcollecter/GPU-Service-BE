@@ -48,21 +48,33 @@ public class TaskResultController {
             logDownload(userId, submissionId, request, "ACCESS_DENIED");
             return ResponseEntity.status(403).body(Map.of("errorCode", "ACCESS_DENIED", "message", "You are not authorized to access this task result."));
         }
+        
         String resultPath = record.getResultPath();
-        if (resultPath == null) {
-            logDownload(userId, submissionId, request, "NO_RESULT");
-            return ResponseEntity.status(404).body(Map.of("errorCode", "NO_RESULT", "message", "Result path is null"));
+        
+        // If resultPath is null or empty, but the status is COMPLETED, 
+        // then try to construct the path based on the task information.
+        // This handles cases where the callback didn't properly update the result path
+        if ((resultPath == null || resultPath.isEmpty()) && record.getStatus() == TaskExecutionRecord.Status.COMPLETED) {
+            // Extract timestamp from submissionId (last 14 characters)
+            String timestamp = submissionId.substring(Math.max(0, submissionId.length() - 14));
+            // Construct the expected path based on the patterns in your system
+            resultPath = String.format("s3://%s/submissions/%s/%s_results/result_notebook.ipynb", 
+                                      bucketName, record.getUserId(), timestamp);
+            
+            // Update the database record with the constructed path
+            record.setResultPath(resultPath);
+            taskExecutionRecordRepository.save(record);
+            
+            System.out.println("Auto-generated result path for task: " + submissionId + 
+                               " with path: " + resultPath);
         }
         
-        // Improved logging for debugging
-        System.out.println("Result path from database: " + resultPath);
-        
-        // Modified path validation - be more lenient with the extension check
-        if (!resultPath.contains(".ipynb")) {
+        if (resultPath == null || !resultPath.contains(".ipynb")) {
             logDownload(userId, submissionId, request, "NO_RESULT");
             return ResponseEntity.status(404).body(Map.of(
-                "errorCode", "INVALID_FORMAT", 
-                "message", "Result file does not have .ipynb extension: " + resultPath
+                "errorCode", "NO_RESULT", 
+                "message", "Result file not found or invalid format: " + 
+                          (resultPath == null ? "null" : resultPath)
             ));
         }
         

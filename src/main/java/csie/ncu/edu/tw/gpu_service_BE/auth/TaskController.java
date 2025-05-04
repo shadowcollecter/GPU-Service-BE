@@ -18,6 +18,7 @@ import java.util.Map;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 
 @RestController
 @RequestMapping("/api/v1/task")
@@ -35,6 +36,9 @@ public class TaskController {
 
     @Autowired
     private MinioPresignService presignService;
+
+    @Value("${minio.bucket.name}")
+    private String bucketName;
 
     @Autowired
     private csie.ncu.edu.tw.gpu_service_BE.k8s.DirectKubernetesSchedulerService kubernetesService;
@@ -242,9 +246,24 @@ public class TaskController {
                 // update status
                 String status = (String) payload.get("status");
                 record.setStatus(TaskExecutionRecord.Status.valueOf(status));
-                if (payload.containsKey("resultPath")) {
-                    record.setResultPath((String) payload.get("resultPath"));
+                
+                // Ensure resultPath is properly set for completed tasks
+                if (status.equals("COMPLETED")) {
+                    if (payload.containsKey("resultPath")) {
+                        String resultPath = (String) payload.get("resultPath");
+                        record.setResultPath(resultPath);
+                        System.out.println("Updated resultPath from callback: " + resultPath);
+                    } else {
+                        // If resultPath is missing in callback but task is completed,
+                        // generate it based on task metadata
+                        String timestamp = submissionId.substring(Math.max(0, submissionId.length() - 14));
+                        String generatedPath = String.format("s3://%s/submissions/%s/%s_results/result_notebook.ipynb", 
+                                                            bucketName, record.getUserId(), timestamp);
+                        record.setResultPath(generatedPath);
+                        System.out.println("Generated missing resultPath: " + generatedPath);
+                    }
                 }
+                
                 if (payload.containsKey("startTime")) {
                     record.setStartTime(LocalDateTime.parse((String) payload.get("startTime")));
                 }

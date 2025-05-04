@@ -34,7 +34,7 @@ public class TaskExecutionRecord {
     @Column(nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(length = 1000000)
+    @Column(length = 10000000)
     private String rejectionReason;
 
     @Column(name = "result_path", length = 1024)

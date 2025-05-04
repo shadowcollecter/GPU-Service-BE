@@ -123,7 +123,9 @@ public class KubernetesJobMonitorService {
                     log.warn("Job {} failed", submissionId);
                     record.setStatus(TaskExecutionRecord.Status.FAILED);
                     record.setEndTime(LocalDateTime.now());
-                    record.setRejectionReason("Kubernetes job failed");
+                    if (record.getRejectionReason() == null || record.getRejectionReason().isEmpty()) {
+                        record.setRejectionReason("Kubernetes job failed");
+                    }
                     recordRepo.save(record);
                 }
             } else if (status.getActive() != null && status.getActive() > 0) {

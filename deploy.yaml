@@ -216,3 +216,10 @@ spec:
             name: gpu-service-fe
             port:
               number: 80
+---
+# 新增服務帳號 a87
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gpu-service-be-account
+  namespace: gpu-service

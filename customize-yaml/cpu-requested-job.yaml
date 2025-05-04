@@ -72,10 +72,12 @@ spec:
         - -c
         - |
           set -euo pipefail
+          exec > >(tee /tmp/job.log) 2>&1
           trap 'echo "Notifying backend of job failure..."; \
+                error_msg=$(sed ':a;N;$!ba;s/"/\\"/g;s/\n/\\n/g' /tmp/job.log); \
                 curl -X POST "$CALLBACK_BASE_URL/$SUBMISSION_ID" \
                      -H "Content-Type: application/json" \
-                     -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"Notebook execution error\"}"; \
+                     -d "{\"submissionId\":\"$SUBMISSION_ID\",\"status\":\"FAILED\",\"errorMessage\":\"$error_msg\"}"; \
                 exit 1' ERR
           echo "Starting job execution at $(date)"
           echo "Downloading input notebook..."

@@ -49,26 +49,78 @@ public class TaskResultController {
             return ResponseEntity.status(403).body(Map.of("errorCode", "ACCESS_DENIED", "message", "You are not authorized to access this task result."));
         }
         String resultPath = record.getResultPath();
-        if (resultPath == null || !resultPath.endsWith(".ipynb")) {
+        if (resultPath == null) {
             logDownload(userId, submissionId, request, "NO_RESULT");
-            return ResponseEntity.status(404).body(Map.of("errorCode", "NO_RESULT", "message", "Result file not found"));
+            return ResponseEntity.status(404).body(Map.of("errorCode", "NO_RESULT", "message", "Result path is null"));
         }
-        // strip 's3://bucketName/' prefix to get object name
-        String prefix = "s3://" + bucketName + "/";
-        String objectName = resultPath.startsWith(prefix) ? resultPath.substring(prefix.length()) : resultPath;
+        
+        // Improved logging for debugging
+        System.out.println("Result path from database: " + resultPath);
+        
+        // Modified path validation - be more lenient with the extension check
+        if (!resultPath.contains(".ipynb")) {
+            logDownload(userId, submissionId, request, "NO_RESULT");
+            return ResponseEntity.status(404).body(Map.of(
+                "errorCode", "INVALID_FORMAT", 
+                "message", "Result file does not have .ipynb extension: " + resultPath
+            ));
+        }
+        
+        // Better handle the s3:// prefix
+        String objectName;
+        if (resultPath.startsWith("s3://")) {
+            // Format: s3://bucketName/path/to/file.ipynb
+            String[] parts = resultPath.substring(5).split("/", 2);
+            if (parts.length < 2) {
+                return ResponseEntity.status(404).body(Map.of(
+                    "errorCode", "INVALID_PATH", 
+                    "message", "Invalid S3 path format: " + resultPath
+                ));
+            }
+            // Use bucket from path rather than application properties
+            String pathBucket = parts[0];
+            objectName = parts[1];
+            
+            // Debug info
+            System.out.println("Using bucket from path: " + pathBucket);
+            System.out.println("Object name: " + objectName);
+            
+            // If bucket in path differs from configured bucket, print warning
+            if (!pathBucket.equals(bucketName)) {
+                System.out.println("Warning: Bucket in path (" + pathBucket + ") differs from configured bucket (" + bucketName + ")");
+            }
+        } else {
+            // If no s3:// prefix, use the path directly as object name
+            objectName = resultPath;
+            System.out.println("Using direct object name: " + objectName);
+        }
+        
         try {
+            System.out.println("Attempting to fetch from bucket: " + bucketName + ", object: " + objectName);
+            
             InputStream stream = minioClient.getObject(
                 GetObjectArgs.builder().bucket(bucketName).object(objectName).build());
+            
             InputStreamResource resource = new InputStreamResource(stream);
             String filename = objectName.substring(objectName.lastIndexOf('/') + 1);
+            
+            System.out.println("File retrieved successfully, sending as: " + filename);
+            
             logDownload(userId, submissionId, request, "SUCCESS");
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_OCTET_STREAM)
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                     .body(resource);
         } catch (Exception e) {
-            logDownload(userId, submissionId, request, "FAILURE");
-            return ResponseEntity.status(404).body(Map.of("errorCode", "NO_FILE", "message", "File not found or error fetching from storage"));
+            System.err.println("Error retrieving file: " + e.getMessage());
+            e.printStackTrace();
+            
+            logDownload(userId, submissionId, request, "FAILURE: " + e.getMessage());
+            return ResponseEntity.status(404).body(Map.of(
+                "errorCode", "RETRIEVAL_ERROR", 
+                "message", "Error fetching file: " + e.getMessage(),
+                "path", objectName
+            ));
         }
     }
 

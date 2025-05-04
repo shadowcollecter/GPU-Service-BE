@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import csie.ncu.edu.tw.gpu_service_BE.auth.TaskExecutionRecord;
 import csie.ncu.edu.tw.gpu_service_BE.auth.TaskExecutionRecordRepository;
+import csie.ncu.edu.tw.gpu_service_BE.auth.UsageService;
 import java.io.InputStream;
 import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
@@ -44,6 +45,9 @@ public class KubernetesJobMonitorService {
     
     @Autowired
     private MinioClient minioClient;
+    
+    @Autowired
+    private UsageService usageService;
     
     @Value("${kubernetes.namespace}")
     private String k8sNamespace;
@@ -162,13 +166,17 @@ public class KubernetesJobMonitorService {
                     fetchResultFromMinio(record);
                     
                     // 計算任務持續時間
+                    long durationSeconds = 0;
                     if (record.getStartTime() != null && record.getEndTime() != null) {
-                        long durationSeconds = java.time.Duration.between(
+                        durationSeconds = java.time.Duration.between(
                             record.getStartTime(), record.getEndTime()).getSeconds();
                         record.setDuration(durationSeconds);
                     }
                     
                     recordRepo.save(record);
+                    if (durationSeconds > 0) {
+                        usageService.adjustUserTime(record.getUserId(), "system", -durationSeconds, "auto-deduct job time");
+                    }
                     log.info("Successfully updated completed job status for {}", submissionId);
                 }
             } else if (jobFailed) {
@@ -186,13 +194,17 @@ public class KubernetesJobMonitorService {
                     fetchErrorLogFromMinio(record);
                     
                     // 計算任務持續時間
+                    long durationSeconds = 0;
                     if (record.getStartTime() != null && record.getEndTime() != null) {
-                        long durationSeconds = java.time.Duration.between(
+                        durationSeconds = java.time.Duration.between(
                             record.getStartTime(), record.getEndTime()).getSeconds();
                         record.setDuration(durationSeconds);
                     }
                     
                     recordRepo.save(record);
+                    if (durationSeconds > 0) {
+                        usageService.adjustUserTime(record.getUserId(), "system", -durationSeconds, "auto-deduct failed job time");
+                    }
                     log.info("Successfully updated failed job status for {}", submissionId);
                 }
             } else if (status.getActive() != null && Objects.requireNonNull(status.getActive()) > 0) {

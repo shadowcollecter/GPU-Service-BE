@@ -9,7 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
 
 # install Python packages system-wide
-RUN pip3 install --no-cache-dir papermill awscli
+RUN pip3 install --no-cache-dir papermill awscli ipykernel && \
+    python3 -m ipykernel install --name python3 --display-name "Python 3"
 
 # use bash entrypoint for job script
 WORKDIR /workspace

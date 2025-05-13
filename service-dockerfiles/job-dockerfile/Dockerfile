@@ -1,5 +1,5 @@
-FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
-
+# FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu24.04
+FROM nvidia/cuda:12.9.0-cudnn-devel-ubuntu24.04
 # install utilities and python
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl jq ca-certificates python3 python3-pip && \

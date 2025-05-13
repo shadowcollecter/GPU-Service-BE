@@ -34,6 +34,7 @@ spec:
       containers:
       - name: runner
         image: shadowcollect/ipynb-runner:latest
+        imagePullPolicy: Always
         resources:
           requests:
             cpu:    "1"

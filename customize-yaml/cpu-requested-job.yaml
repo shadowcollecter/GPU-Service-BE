@@ -72,6 +72,8 @@ spec:
               fieldPath: metadata.annotations['gpu-service-be.csie.ncu.edu.tw/timestamp']
         - name: GPU_TYPE
           value: "CPU"
+        - name: CUDA_VISIBLE_DEVICES
+          value: ""
         command:
         - /bin/bash
         - -c
